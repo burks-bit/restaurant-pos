@@ -1,0 +1,44 @@
+04/20/2026 to patch!!
+1. Biometrix.vue - DONE
+2. useEmployeeAttendance.js - DONE
+3. DTRService.php - DONE
+4. EmployeeSchedule.php - DONE
+5. created new column time_in_photo, time_out_photo in employee_schedules varchar(700) nullable - DONE
+6. useEmployeeIndex.js - DONE
+7. Index.vue employees - DONE
+8. EmployeeService.php - DONE
+9. PayrollDetail.vue - DONE
+10. PayrollService.php - DONE
+11. Employee.php - DONE
+12. usePayrollDetail.js - DONE
+13. payslip-single.blade.php - DONE
+14. payrollItem.php - DONE
+15. payrollController.php - DONE
+16. payrollEarning.php - DONE
+17. payroll_earnings table - DONE
+18. payslip-batch.blade.php - DONE
+19. payslip-content.blade.php - DONE
+20. Shift.php - DONE
+21. shifts and cash_registers table - DONE
+22. Order.php - DONE
+23. Expense.php - DONE
+24. added shift_id bigint(20) not null unusigned integer on orders and expenses - DONE
+25. CashierNavLinks.vue - DONE
+26. CashierExpensePage.vue - DONE
+27. expenseController.php - DONE
+28. expenseService.php - DONE
+29. web.php DONE
+30. OrderService.php - DONE
+31. SalesReport.vue - DONE
+32. useSalesReport.js - DONE
+33. ReportService.php - DONE
+34. SalesReport.blade.php - DONE
+35. useCashRegister.js - DONE
+36. Index.vue -cash_register - DONE
+37. CashRegisterController.php - DONE
+36. CashRegisterService - DONE
+37. CashRegister.php - DONE
+38. User.php - DONE
+39. add Others on expenses category -DONE
+40. salesummaryreport.blade.php - DONE
+41. ManagerNavLinks.vue - DONE

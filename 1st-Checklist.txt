@@ -1,0 +1,37 @@
+Hapag sa Balai
+
+Front Door Staff
+[x] 1. Will give the table number 
+[x] 2. Will enter the number of pax per table
+
+Cashier
+[x] 1. Making sure of the client’s payment 
+[x] 2. Should be aligned and balanced with the front door
+[x] 3. No voiding
+
+Purchaser
+[x] 1. How much are the stocks for expense monitoring
+[x] 2. How many are the stocks for replenishment (per kilo, per gram or what can be used)
+
+Kitchen
+[x] 1. How many stocks were used
+[x] 2. Inventory of the stocks per day (mandatory)
+
+Manager
+[x] 1. Double checking of stocks, start of day and end of day monitoring 
+[x] 2. Voiding of transaction
+[x] 3. Issuance of gift checks, gift vouchers (inventory in system)
+[x] 4. Discounts for PWD and senior
+[x] 5. Scheduling of Employees
+
+Finance
+[x] 1. Inventory per week 
+[x] 2. Employee in and out for payroll
+[x] 3. Monitoring of all expenses (marketing, kitchen etc.)
+[x] 4. Beginning inventory includes all equipments
+[x] 5. Final checking of Payroll
+
+HR
+[x] 1. 201 File (employee profiling)
+[x] 2. Monitoring Sched of employee 
+[x] 3. Generate Payroll for Employee

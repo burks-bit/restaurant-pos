@@ -1,0 +1,15 @@
+1. Tapos sir yung sa frontdoor baka pwede meron din search nalang ng table para mabilis - Done
+2. Pagawan din ako sir account nung dalawang frontdoor si grace po yun saka si roselle
+3. to make 15pax capacity per table - DONE
+4. seed items - DONE
+    - coke in  can - 35 pesos
+    - coke 1.5 ltrs - 100 pesos
+    - royal in can - 35 pesos
+    - 7up bottle - 10 pesos
+
+5. 299 per head. half and no amount - DONE
+6. Saka sir kung pwede po sir na meron nalang na column din for payment ng additional hours kami nalang maglalagay po ng amount sir manager
+7. add field for other documents
+8. clarification: scheduling per week 1 shift per employee
+9. to check thermal printer
+10. to check cash dispenser

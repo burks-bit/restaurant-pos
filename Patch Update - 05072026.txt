@@ -1,0 +1,44 @@
+05//07/2026 to patch!!
+1. Index.vue - Employees - DONE
+2. usePosIndex.js - DONE
+3. useEmployeeIndex.js - DONE
+4. added column branch_id in employees and users (TINYINT(1) NULLABLE)  - DONE
+5. payrollservice.php - DONE
+6. DTRService.php - DONE
+7. CashierNavLinks.vue - DONE
+8. PayrollGenerate.vue - DONE
+9. usePayrollGenerate.js - DONE
+10. EmployeeController.php - DONE
+11. web.php - DONE
+12. receipt.blade.php - DONE
+13. payslip-content.blade.php - DONE
+14. EmployeeService.php - DONE
+15. Employee.php - DONE
+16. User.php - DONE
+17.
+18. 
+19. 
+20. 
+21. 
+22. 
+23. 
+24. 
+25. 
+26. 
+27. 
+28. 
+29. 
+30. 
+31. 
+32. 
+33. 
+34. 
+35. 
+36. 
+37. 
+36. 
+37. 
+38. 
+39. 
+40. 
+41. 

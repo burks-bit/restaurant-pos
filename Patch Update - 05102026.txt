@@ -1,0 +1,63 @@
+05/10/2026 to patch!!
+
+Vue Files
+1. Index.vue (Reservation) - DONE
+2. ReservationForm.vue - DONE
+3. TableAdmission.vue - DONE
+4. POS.vue - DONE
+5. 
+6. 
+7. 
+8. 
+9. 
+10. 
+
+Composables
+1. useReservation.js - DONE
+2. useTableAddmission.js - DONE
+3. usPosIndex.js - DONE
+4. 
+5. 
+
+Controllers
+1. ReservationController.php - DONE
+2. TableController.php - DONE
+3. 
+4. 
+5. 
+
+Services
+1. ReservationService.php - DONE
+2. TableService.php - DONE
+3. OrderService.php - DONE
+4. CashRegisterService.php - DONE
+5. POSService.php - DONE
+6. ReportService.php - DONE
+7. 
+8. 
+9. 
+10. 
+
+Routes
+1. 
+2. 
+
+Views
+1. 
+2. 
+3. 
+4. 
+5. 
+6. 
+
+Models
+1. Reservation.php - DONE
+2. ReservationPax.php - DONE
+3. Order.php - DONE
+4. TableSession.php - DONE
+5. 
+6. 
+
+Others
+1. 
+2. 
