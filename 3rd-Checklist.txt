@@ -1,6 +1,0 @@
-[ ] 1. manager's approval upon posting of petty cash allocations
-[x] 2. denomination of petty cash
-[x] 3. leave application form
-[x] 4. manual input of OT
-[x] 5. check routing for fetching employee DTR
-[x] 6. hide filing of OT
