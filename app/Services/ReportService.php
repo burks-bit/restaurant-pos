@@ -175,13 +175,11 @@ class ReportService
             ]);
 
         if ($reportType === 'stockin') {
-            $movementsQuery->where('type', 'stockin');
+            $movementsQuery->whereIn('type', ['stockin', 'adjustment']);
         }
-
         if ($reportType === 'stockout') {
-            $movementsQuery->where('type', 'stockout');
+            $movementsQuery->whereIn('type', ['stockout', 'adjustment']);
         }
-
         $movements = $movementsQuery->get();
 
         $reportData = collect();
@@ -198,19 +196,28 @@ class ReportService
                 ->where('type', 'stockout')
                 ->sum('quantity');
 
+            // ✅ Add this
+            $actualCount = $itemMovements
+                ->where('type', 'adjustment')
+                ->where('adjustment_type', 'physical_count')
+                ->sum('quantity');
+
             if ($reportType === 'stockin' && $stockInQty <= 0) continue;
             if ($reportType === 'stockout' && $stockOutQty <= 0) continue;
 
             $reportData->push([
-                'id' => $item->id,
-                'name' => $item->name,
-                'category' => $item->category->name ?? '',
-                'unit' => $item->unit,
+                'id'               => $item->id,
+                'name'             => $item->name,
+                'category'         => $item->category->name ?? '',
+                'unit'             => $item->unit,
                 'current_quantity' => $item->current_quantity,
-                'stockInQty' => $stockInQty,
-                'stockOutQty' => $stockOutQty,
-                'unit_price' => $item->unit_price ?? 0,
-                'total_cost' => $stockOutQty * ($item->unit_price ?? 0),
+                'stockInQty'       => $stockInQty,
+                'stockOutQty'      => $stockOutQty,
+                'unit_price'       => $item->unit_price ?? 0,
+                'total_cost'       => $stockOutQty * ($item->unit_price ?? 0),
+                'actualCount'      => $actualCount,                                         // ✅
+                'finalCount'       => $actualCount + $stockInQty - $stockOutQty,            // ✅
+                'remarks'          => $item->remarks ?? '',                                 // ✅
             ]);
         }
 
@@ -262,8 +269,10 @@ class ReportService
         $movementsQuery = \App\Models\InventoryMovement::with('item')
             ->whereBetween('created_at', [$start . ' 00:00:00', $end . ' 23:59:59']);
 
-        if ($reportType === 'stockin')  $movementsQuery->where('type', 'stockin');
-        if ($reportType === 'stockout') $movementsQuery->where('type', 'stockout');
+        // Also fix movements query to include adjustments (same fix as before)
+        if ($reportType === 'stockin')  $movementsQuery->whereIn('type', ['stockin', 'adjustment']);
+        if ($reportType === 'stockout') $movementsQuery->whereIn('type', ['stockout', 'adjustment']);
+
 
         $movements = $movementsQuery->get();
 
@@ -271,8 +280,16 @@ class ReportService
 
         foreach ($items as $item) {
             $itemMovements = $movements->where('inventory_item_id', $item->id);
+            
             $stockInQty    = $itemMovements->where('type', 'stockin')->sum('quantity');
             $stockOutQty   = $itemMovements->where('type', 'stockout')->sum('quantity');
+
+            $actualCount = $itemMovements
+                ->where('type', 'adjustment')
+                ->where('adjustment_type', 'physical_count')
+                ->sum('quantity');
+
+            $finalCount = $actualCount + $stockInQty - $stockOutQty;
 
             if ($reportType === 'stockin'  && $stockInQty  <= 0) continue;
             if ($reportType === 'stockout' && $stockOutQty <= 0) continue;
@@ -287,12 +304,23 @@ class ReportService
                 'stockOutQty'      => $stockOutQty,
                 'unit_price'       => $item->unit_price ?? 0,
                 'total_cost'       => $stockOutQty * ($item->unit_price ?? 0),
+                'actualCount'      => $actualCount,   // ✅ new
+                'finalCount'       => $finalCount,    // ✅ new
                 'remarks'          => $item->remarks ?? '',
             ]);
         }
 
         // $filename = 'inventory_report_' . now()->format('Ymd_His') . '.xlsx';
-        $filename = 'HSB_Inventory_Meat_' . now()->format('Y-m-d') . '.xlsx';
+        if($itemType == '0')
+            $filename = 'HSB_Inventory_Wet_' . now()->format('Y-m-d') . '.xlsx';
+        
+        else if($itemType == '1')
+            $filename = 'HSB_Inventory_Dry_' . now()->format('Y-m-d') . '.xlsx';
+        
+        else
+            $filename = 'HSB_Inventory_All_' . now()->format('Y-m-d') . '.xlsx';{
+        }
+        // $filename = 'HSB_Inventory_Meat_' . now()->format('Y-m-d') . '.xlsx';
 
         return Excel::download(
             // new \App\Exports\InventoryReportExport($reportData, $itemType ?? 'all'),

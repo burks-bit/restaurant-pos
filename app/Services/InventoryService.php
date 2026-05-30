@@ -299,4 +299,25 @@ class InventoryService
 
         return redirect()->back()->with('success', 'Category created successfully.');
     }
+
+    public function physicalCount(Request $request, InventoryItem $item)
+    {
+        Log::info('Performing physical count for item ID: ' . $item->id);
+        Log::info($request->all());
+        $request->validate([
+            'quantity'        => 'required|numeric|min:0',
+            'adjustment_type' => 'required|string',
+            'note'            => 'nullable|string',
+        ]);
+
+        $item->movements()->create([
+            'type'            => 'adjustment',
+            'adjustment_type' => $request->adjustment_type, // 'physical_count'
+            'quantity'        => $request->quantity,
+            'note'            => $request->note,
+            'created_by'      => auth()->id(),
+        ]);
+
+        return back();
+    }
 }

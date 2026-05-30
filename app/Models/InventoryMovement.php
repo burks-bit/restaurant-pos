@@ -13,7 +13,8 @@ class InventoryMovement extends Model
         'unit_price',
         'note',
         'created_by',
-        'updated_by'
+        'updated_by',
+        'adjustment_type'
     ];
 
     public function item()

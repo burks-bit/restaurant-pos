@@ -84,8 +84,12 @@ export function useInventoryReport() {
       category_id: selectedCategory.value || '',
     })
 
-    window.location.href = url  // triggers file download
+    window.location.href = url
   }
+
+  // ✅ Determine if current selection is dry or wet
+  const isDry = () => InventoryItemType.value === '1'
+  const isWet = () => InventoryItemType.value === '0'
 
   return {
     categories,
@@ -98,6 +102,8 @@ export function useInventoryReport() {
     inventoryMovements,
     fetchInventoryMovements,
     generatePdfReport,
-    generateExcelReport
+    generateExcelReport,
+    isDry,
+    isWet,
   }
 }

@@ -105,4 +105,14 @@ class InventoryController extends Controller
             return back()->with('error', 'Failed to create category.');
         }
     }
+    
+    public function physicalCount(Request $request, InventoryItem $item)
+    {
+        try {
+            return $this->inventoryService->physicalCount($request, $item);
+        } catch (\Throwable $e) {
+            Log::error('InventoryController@physicalCount failed: ' . $e->getMessage());
+            return back()->with('error', 'Failed to create physical count.');
+        }
+    }
 }

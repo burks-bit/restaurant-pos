@@ -98,6 +98,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('/items/{item}/stock-in', [InventoryController::class, 'stockIn'])->name('inventory.stock-in');
         Route::post('/items/{item}/stock-out', [InventoryController::class, 'stockOut'])->name('inventory.stock-out');
 
+        Route::post('/inventory/{item}/physical-count', [InventoryController::class, 'physicalCount'])->name('inventory.physical-count');
+
         if ($withCategories) {
             Route::get('/inventory/categories', [InventoryController::class, 'getCategories'])->name('inventory.categories');
             Route::post('/inventory/categories', [InventoryController::class, 'storeCategory'])->name('inventory.categories.store');

@@ -1,6 +1,7 @@
 <template>
   <AuthenticatedLayout>
 
+    <!-- Loading Overlay -->
     <div
       v-if="isLoading"
       class="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50"
@@ -19,6 +20,7 @@
           Inventory Report
         </h1>
 
+        <!-- Filters -->
         <div class="flex flex-wrap gap-3 mb-4 items-end">
           <div class="flex flex-col">
             <label class="text-sm text-gray-600">Category</label>
@@ -27,11 +29,7 @@
               class="border rounded px-3 py-2 text-sm w-48"
             >
               <option value="">All Categories</option>
-              <option
-                v-for="cat in categories"
-                :key="cat.id"
-                :value="cat.id"
-              >
+              <option v-for="cat in categories" :key="cat.id" :value="cat.id">
                 {{ cat.name }}
               </option>
             </select>
@@ -56,9 +54,7 @@
           </div>
 
           <div class="flex flex-col">
-            <label class="text-sm text-gray-600 mb-1 w-48">
-              Report Type
-            </label>
+            <label class="text-sm text-gray-600 mb-1">Report Type</label>
             <select
               v-model="InventoryRpType"
               class="border rounded px-3 py-2 text-sm w-48"
@@ -69,11 +65,9 @@
               <option value="all">All</option>
             </select>
           </div>
-          
+
           <div class="flex flex-col">
-            <label class="text-sm text-gray-600 mb-1 w-48">
-              Item Type
-            </label>
+            <label class="text-sm text-gray-600 mb-1">Item Type</label>
             <select
               v-model="InventoryItemType"
               class="border rounded px-3 py-2 text-sm w-40"
@@ -112,53 +106,147 @@
           </button>
         </div>
 
-        <div class="bg-white rounded-lg shadow overflow-auto max-h-[45vh]">
-          <table class="min-w-full table-auto border-collapse">
-            <thead class="sticky top-0 bg-gray-100 z-10">
-              <tr class="text-left text-sm font-semibold">
-                <th class="px-2 py-2 border">ID</th>
+        <!-- Table -->
+        <div class="bg-white rounded-lg shadow overflow-auto max-h-[55vh]">
+          <table class="min-w-full table-auto border-collapse text-sm">
+
+            <!-- ✅ WET INGREDIENTS HEADER -->
+            <thead v-if="isWet()" class="sticky top-0 bg-gray-100 z-10">
+              <tr class="text-left font-semibold">
+                <th class="px-2 py-2 border">#</th>
                 <th class="px-2 py-2 border">Category</th>
-                <th class="px-2 py-2 border">Item</th>
+                <th class="px-2 py-2 border">Item Name</th>
+                <th class="px-2 py-2 border">Unit</th>
+                <th class="px-2 py-2 border text-green-700">Quantity</th>
+                <th class="px-2 py-2 border">Remarks</th>
+              </tr>
+            </thead>
+
+            <!-- ✅ DRY INGREDIENTS HEADER -->
+            <thead v-else-if="isDry()" class="sticky top-0 bg-gray-100 z-10">
+              <tr class="text-left font-semibold">
+                <th class="px-2 py-2 border">#</th>
+                <th class="px-2 py-2 border">Category</th>
+                <th class="px-2 py-2 border">Item Name</th>
+                <th class="px-2 py-2 border">Unit</th>
+                <th class="px-2 py-2 border text-yellow-600">Actual Count</th>
+                <th class="px-2 py-2 border text-green-600">Stock In</th>
+                <th class="px-2 py-2 border text-red-600">Stock Out</th>
+                <th class="px-2 py-2 border text-blue-600">Final Count</th>
+                <th class="px-2 py-2 border">Remarks</th>
+              </tr>
+            </thead>
+
+            <!-- ✅ ALL / DEFAULT HEADER -->
+            <thead v-else class="sticky top-0 bg-gray-100 z-10">
+              <tr class="text-left font-semibold">
+                <th class="px-2 py-2 border">#</th>
+                <th class="px-2 py-2 border">Category</th>
+                <th class="px-2 py-2 border">Item Name</th>
                 <th class="px-2 py-2 border">Unit</th>
                 <th class="px-2 py-2 border">Current Stock</th>
-                <th class="px-2 py-2 border">Stock In (Range)</th>
-                <th class="px-2 py-2 border">Stock Out (Range)</th>
+                <th class="px-2 py-2 border text-green-600">Stock In</th>
+                <th class="px-2 py-2 border text-red-600">Stock Out</th>
                 <th class="px-2 py-2 border">Total Used Cost</th>
               </tr>
             </thead>
 
             <tbody>
-              <tr
-                v-for="movement in inventoryMovements"
-                :key="movement.id"
-                class="hover:bg-gray-50 text-sm"
-              >
-                <td class="px-2 py-2 border">{{ movement.id }}</td>
-                <td class="px-2 py-2 border">{{ movement.category }}</td>
-                <td class="px-2 py-2 border font-medium">{{ movement.name }}</td>
-                <td class="px-2 py-2 border">{{ movement.unit }}</td>
-                <td
-                  class="px-2 py-2 border font-semibold"
-                  :class="movement.current_quantity <= 5 ? 'text-red-600' : 'text-green-600'"
+
+              <!-- ✅ WET INGREDIENTS ROWS -->
+              <template v-if="isWet()">
+                <tr
+                  v-for="(movement, index) in inventoryMovements"
+                  :key="movement.id"
+                  class="hover:bg-gray-50"
                 >
-                  {{ movement.current_quantity }}
-                </td>
-                <td class="px-2 py-2 border text-green-600 font-semibold">
-                  {{ movement.stockInQty }}
-                </td>
-                <td class="px-2 py-2 border text-red-600 font-semibold">
-                  {{ movement.stockOutQty }}
-                </td>
-                <td class="px-2 py-2 border">
-                  ₱{{ movement.total_cost.toFixed(2) }}
+                  <td class="px-2 py-2 border">{{ index + 1 }}</td>
+                  <td class="px-2 py-2 border">{{ movement.category }}</td>
+                  <td class="px-2 py-2 border font-medium">{{ movement.name }}</td>
+                  <td class="px-2 py-2 border">{{ movement.unit }}</td>
+                  <td class="px-2 py-2 border text-green-600 font-semibold">
+                    {{ movement.stockInQty ?? movement.current_quantity }}
+                  </td>
+                  <td class="px-2 py-2 border text-gray-500 italic">
+                    {{ movement.remarks ?? '—' }}
+                  </td>
+                </tr>
+              </template>
+
+              <!-- ✅ DRY INGREDIENTS ROWS -->
+              <template v-else-if="isDry()">
+                <tr
+                  v-for="(movement, index) in inventoryMovements"
+                  :key="movement.id"
+                  class="hover:bg-gray-50"
+                >
+                  <td class="px-2 py-2 border">{{ index + 1 }}</td>
+                  <td class="px-2 py-2 border">{{ movement.category }}</td>
+                  <td class="px-2 py-2 border font-medium">{{ movement.name }}</td>
+                  <td class="px-2 py-2 border">{{ movement.unit }}</td>
+
+                  <!-- Actual Count from physical_count adjustment -->
+                  <td class="px-2 py-2 border text-yellow-600 font-semibold">
+                    {{ movement.actualCount ?? 0 }}
+                  </td>
+
+                  <!-- Stock In -->
+                  <td class="px-2 py-2 border text-green-600 font-semibold">
+                    {{ movement.stockInQty ?? 0 }}
+                  </td>
+
+                  <!-- Stock Out -->
+                  <td class="px-2 py-2 border text-red-600 font-semibold">
+                    {{ movement.stockOutQty ?? 0 }}
+                  </td>
+
+                  <!-- Final Count = actualCount + stockIn - stockOut -->
+                  <td class="px-2 py-2 border text-blue-600 font-semibold">
+                    {{ (Number(movement.actualCount ?? 0) + Number(movement.stockInQty ?? 0) - Number(movement.stockOutQty ?? 0)) }}
+                  </td>
+
+                  <td class="px-2 py-2 border text-gray-500 italic">
+                    {{ movement.remarks ?? '—' }}
+                  </td>
+                </tr>
+              </template>
+
+              <!-- ✅ ALL / DEFAULT ROWS -->
+              <template v-else>
+                <tr
+                  v-for="(movement, index) in inventoryMovements"
+                  :key="movement.id"
+                  class="hover:bg-gray-50"
+                >
+                  <td class="px-2 py-2 border">{{ index + 1 }}</td>
+                  <td class="px-2 py-2 border">{{ movement.category }}</td>
+                  <td class="px-2 py-2 border font-medium">{{ movement.name }}</td>
+                  <td class="px-2 py-2 border">{{ movement.unit }}</td>
+                  <td
+                    class="px-2 py-2 border font-semibold"
+                    :class="movement.current_quantity <= 5 ? 'text-red-600' : 'text-green-600'"
+                  >
+                    {{ movement.current_quantity }}
+                  </td>
+                  <td class="px-2 py-2 border text-green-600 font-semibold">
+                    {{ movement.stockInQty ?? 0 }}
+                  </td>
+                  <td class="px-2 py-2 border text-red-600 font-semibold">
+                    {{ movement.stockOutQty ?? 0 }}
+                  </td>
+                  <td class="px-2 py-2 border">
+                    ₱{{ Number(movement.total_cost ?? 0).toFixed(2) }}
+                  </td>
+                </tr>
+              </template>
+
+              <!-- Empty State -->
+              <tr v-if="inventoryMovements.length === 0">
+                <td colspan="9" class="text-center py-6 text-gray-400">
+                  No records found. Please fetch data first.
                 </td>
               </tr>
 
-              <tr v-if="inventoryMovements.length === 0">
-                <td colspan="9" class="text-center py-6 text-gray-400">
-                  No records found
-                </td>
-              </tr>
             </tbody>
           </table>
         </div>
@@ -183,6 +271,8 @@ const {
   inventoryMovements,
   fetchInventoryMovements,
   generatePdfReport,
-  generateExcelReport
+  generateExcelReport,
+  isDry,
+  isWet,
 } = useInventoryReport()
 </script>

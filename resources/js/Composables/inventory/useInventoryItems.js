@@ -54,6 +54,47 @@ export function useInventoryItems() {
     }
   }
 
+  // Add to form refs at the top
+  const showPhysicalCountModal = ref(false)
+  const physicalCountForm = ref({
+    quantity: '',
+    note: '',
+    adjustment_type: 'physical_count', // fixed value
+  })
+
+  const resetPhysicalCountForm = () => {
+    physicalCountForm.value = {
+      quantity: '',
+      note: '',
+      adjustment_type: 'physical_count',
+    }
+  }
+
+  // Add these functions
+  const openPhysicalCount = (item) => {
+    selected.value = item
+    resetPhysicalCountForm()
+    showPhysicalCountModal.value = true
+  }
+
+  const closePhysicalCountModal = () => {
+    showPhysicalCountModal.value = false
+    selected.value = {}
+    resetPhysicalCountForm()
+  }
+
+  const submitPhysicalCount = () => {
+    router.post(
+      route(`${prefix.value}.inventory.physical-count`, selected.value.id),
+      physicalCountForm.value,
+      {
+        onSuccess: () => {
+          closePhysicalCountModal()
+        },
+      }
+    )
+  }
+
   const filteredItems = computed(() => {
     let filtered = items.value
 
@@ -179,5 +220,11 @@ export function useInventoryItems() {
     openAddItemModal,
     closeAddItemModal,
     submitAddItem,
+
+    showPhysicalCountModal,
+    physicalCountForm,
+    openPhysicalCount,
+    closePhysicalCountModal,
+    submitPhysicalCount,
   }
 }

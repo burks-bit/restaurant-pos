@@ -33,7 +33,6 @@ export function useInventorySummary() {
     return filteredItems.value.map((item) => {
       const filteredMovements = inventoryMovements.value.filter((movement) => {
         const movementDate = movement.created_at?.split('T')[0] ?? ''
-
         const withinStart = !startDate.value || movementDate >= startDate.value
         const withinEnd = !endDate.value || movementDate <= endDate.value
 
@@ -45,17 +44,26 @@ export function useInventorySummary() {
       })
 
       const stockInRange = filteredMovements
-        .filter((movement) => movement.type === 'stockin')
-        .reduce((sum, movement) => sum + Number(movement.quantity || 0), 0)
+        .filter((m) => m.type === 'stockin')
+        .reduce((sum, m) => sum + Number(m.quantity || 0), 0)
 
       const stockOutRange = filteredMovements
-        .filter((movement) => movement.type === 'stockout')
-        .reduce((sum, movement) => sum + Number(movement.quantity || 0), 0)
+        .filter((m) => m.type === 'stockout')
+        .reduce((sum, m) => sum + Number(m.quantity || 0), 0)
+
+      // ✅ These must be INSIDE the .map() callback
+      const actualCount = filteredMovements
+        .filter((m) => m.type === 'adjustment' && m.adjustment_type === 'physical_count')
+        .reduce((sum, m) => sum + Number(m.quantity || 0), 0)
+
+      const finalCount = actualCount + stockInRange - stockOutRange
 
       return {
         ...item,
         stockInRange,
         stockOutRange,
+        actualCount,   // ✅
+        finalCount,    // ✅
       }
     })
   })

@@ -100,58 +100,62 @@
                 <th class="px-2 py-2 border">Item</th>
                 <th class="px-2 py-2 border">Unit</th>
                 <th class="px-2 py-2 border">Current Stock</th>
-                <th class="px-2 py-2 border">Stock In (Range)</th>
-                <th class="px-2 py-2 border">Stock Out (Range)</th>
-                <th class="px-2 py-2 border">Total Used Cost</th>
-                <th class="px-2 py-2 border">By</th>
+                <th class="px-2 py-2 border text-yellow-600">Actual Count</th>  <!-- ✅ new -->
+                <th class="px-2 py-2 border text-green-600">Stock In</th>
+                <th class="px-2 py-2 border text-red-600">Stock Out</th>
+                <th class="px-2 py-2 border text-blue-600">Final Count</th>     <!-- ✅ new -->
               </tr>
             </thead>
 
             <tbody>
               <tr
-                v-for="movement in filteredInventoryMovements"
-                :key="movement.id"
+                v-for="item in itemsWithMovement"
+                :key="item.id"
                 class="hover:bg-gray-50 text-sm"
               >
-                <td class="px-2 py-2 border">{{ movement.id }}</td>
+                <td class="px-2 py-2 border">{{ item.id }}</td>
 
                 <td class="px-2 py-2 border">
-                  {{ movement.item?.category?.name }}
+                  {{ item.category?.name }}
                 </td>
 
                 <td class="px-2 py-2 border font-medium">
-                  {{ movement.item?.name }}
+                  {{ item.name }}
                 </td>
 
                 <td class="px-2 py-2 border">
-                  {{ movement.item?.unit }}
+                  {{ item.unit }}
                 </td>
 
                 <td
                   class="px-2 py-2 border font-semibold"
-                  :class="Number(movement.item?.current_quantity) <= 5 ? 'text-red-600' : 'text-green-600'"
+                  :class="Number(item.current_quantity) <= 5 ? 'text-red-600' : 'text-green-600'"
                 >
-                  {{ movement.item?.current_quantity }}
+                  {{ item.current_quantity }}
                 </td>
 
+                <!-- ✅ NEW: Actual Count (physical count submitted) -->
+                <td class="px-2 py-2 border text-yellow-600 font-semibold">
+                  {{ item.actualCount ?? 0 }}
+                </td>
+
+                <!-- Stock In for date range -->
                 <td class="px-2 py-2 border text-green-600 font-semibold">
-                  {{ movement.type === 'stockin' ? movement.quantity : 0 }}
+                  {{ item.stockInRange ?? 0 }}
                 </td>
 
+                <!-- Stock Out for date range -->
                 <td class="px-2 py-2 border text-red-600 font-semibold">
-                  {{ movement.type === 'stockout' ? movement.quantity : 0 }}
+                  {{ item.stockOutRange ?? 0 }}
                 </td>
 
-                <td class="px-2 py-2 border">
-                  ₱{{ (Number(movement.quantity) * Number(movement.unit_price)).toFixed(2) }}
-                </td>
-
-                <td class="px-2 py-2 border">
-                  {{ movement.creator?.name }}
+                <!-- ✅ NEW: Final Count = actualCount + stockIn - stockOut -->
+                <td class="px-2 py-2 border text-blue-600 font-semibold">
+                  {{ item.finalCount ?? 0 }}
                 </td>
               </tr>
 
-              <tr v-if="filteredInventoryMovements.length === 0">
+              <tr v-if="itemsWithMovement.length === 0">
                 <td colspan="9" class="text-center py-6 text-gray-400">
                   No records found
                 </td>
@@ -181,5 +185,6 @@ const {
   totalStockQuantity,
   lowStockItems,
   generatePdfReport,
+  itemsWithMovement
 } = useInventorySummary()
 </script>
