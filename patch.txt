@@ -9,3 +9,7 @@ ReportController.php
 web.php
 InventoryReportExport.php
 InventoryReport.blade.php
+InventoryMovement.php
+useInventorySummary.js
+Index.vue -> inventory
+InventoryController.php
