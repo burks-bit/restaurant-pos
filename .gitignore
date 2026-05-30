@@ -20,3 +20,9 @@ yarn-error.log
 /.nova
 /.vscode
 /.zed
+
+# Uploaded/generated media files
+/storage/app/public/attendance_photo_images/
+/storage/app/public/employment_documents/
+/storage/app/public/menus/
+/storage/app/public/web_images/
