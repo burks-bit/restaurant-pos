@@ -69,6 +69,21 @@
               <option value="all">All</option>
             </select>
           </div>
+          
+          <div class="flex flex-col">
+            <label class="text-sm text-gray-600 mb-1 w-48">
+              Item Type
+            </label>
+            <select
+              v-model="InventoryItemType"
+              class="border rounded px-3 py-2 text-sm w-40"
+            >
+              <option value="">Select Item Type</option>
+              <option value="0">Wet Ingredients</option>
+              <option value="1">Dry Ingredients</option>
+              <option value="all">All</option>
+            </select>
+          </div>
 
           <button
             @click="fetchInventoryMovements"
@@ -84,7 +99,16 @@
             class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm flex items-center gap-2 disabled:opacity-50"
           >
             <span class="fa fa-print"></span>
-            Generate PDF Report
+            PDF
+          </button>
+
+          <button
+            @click="generateExcelReport"
+            :disabled="inventoryMovements.length === 0"
+            class="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 text-sm flex items-center gap-2 disabled:opacity-50"
+          >
+            <span class="fa fa-file-excel"></span>
+            Excel
           </button>
         </div>
 
@@ -152,11 +176,13 @@ const {
   categories,
   selectedCategory,
   InventoryRpType,
+  InventoryItemType,
   startDate,
   endDate,
   isLoading,
   inventoryMovements,
   fetchInventoryMovements,
   generatePdfReport,
+  generateExcelReport
 } = useInventoryReport()
 </script>

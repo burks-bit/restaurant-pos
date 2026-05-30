@@ -136,6 +136,7 @@ class ReportService
         $startDate  = $request->query('start_date');
         $endDate    = $request->query('end_date');
         $categoryId = $request->query('category_id');
+        $itemType   = $request->query('item_type');
 
         $today = now()->toDateString();
 
@@ -152,6 +153,17 @@ class ReportService
 
         if ($categoryId) {
             $itemsQuery->where('category_id', $categoryId);
+        }
+
+        if ($itemType !== null && $itemType !== '' && $itemType !== 'all') {
+            if ($itemType === '0') {
+                $itemsQuery->where(function ($query) {
+                    $query->where('is_dry', false)
+                        ->orWhereNull('is_dry');
+                });
+            } else {
+                $itemsQuery->where('is_dry', true);
+            }
         }
 
         $items = $itemsQuery->get();
@@ -209,6 +221,89 @@ class ReportService
             'success' => true,
             'data' => $reportData
         ]);
+    }
+
+    public function exportInventoryReportExcel(Request $request)
+    {
+        $reportType = $request->query('type', 'all');
+        $startDate  = $request->query('start_date');
+        $endDate    = $request->query('end_date');
+        $categoryId = $request->query('category_id');
+        $itemType   = $request->query('item_type');
+
+        $today = now()->toDateString();
+
+        if (empty($startDate) || empty($endDate) || $startDate === $endDate) {
+            $reportDate = $startDate ?? $today;
+            $start = $end = $reportDate;
+        } else {
+            $start = $startDate;
+            $end   = $endDate;
+        }
+
+        $itemsQuery = \App\Models\InventoryItem::with('category');
+
+        if ($categoryId) {
+            $itemsQuery->where('category_id', $categoryId);
+        }
+
+        if ($itemType !== null && $itemType !== '' && $itemType !== 'all') {
+            if ($itemType === '0') {
+                $itemsQuery->where(function ($q) {
+                    $q->where('is_dry', false)->orWhereNull('is_dry');
+                });
+            } else {
+                $itemsQuery->where('is_dry', true);
+            }
+        }
+
+        $items = $itemsQuery->get();
+
+        $movementsQuery = \App\Models\InventoryMovement::with('item')
+            ->whereBetween('created_at', [$start . ' 00:00:00', $end . ' 23:59:59']);
+
+        if ($reportType === 'stockin')  $movementsQuery->where('type', 'stockin');
+        if ($reportType === 'stockout') $movementsQuery->where('type', 'stockout');
+
+        $movements = $movementsQuery->get();
+
+        $reportData = collect();
+
+        foreach ($items as $item) {
+            $itemMovements = $movements->where('inventory_item_id', $item->id);
+            $stockInQty    = $itemMovements->where('type', 'stockin')->sum('quantity');
+            $stockOutQty   = $itemMovements->where('type', 'stockout')->sum('quantity');
+
+            if ($reportType === 'stockin'  && $stockInQty  <= 0) continue;
+            if ($reportType === 'stockout' && $stockOutQty <= 0) continue;
+
+            $reportData->push([
+                'id'               => $item->id,
+                'name'             => $item->name,
+                'category'         => $item->category->name ?? '',
+                'unit'             => $item->unit,
+                'current_quantity' => $item->current_quantity,
+                'stockInQty'       => $stockInQty,
+                'stockOutQty'      => $stockOutQty,
+                'unit_price'       => $item->unit_price ?? 0,
+                'total_cost'       => $stockOutQty * ($item->unit_price ?? 0),
+                'remarks'          => $item->remarks ?? '',
+            ]);
+        }
+
+        // $filename = 'inventory_report_' . now()->format('Ymd_His') . '.xlsx';
+        $filename = 'HSB_Inventory_Meat_' . now()->format('Y-m-d') . '.xlsx';
+
+        return Excel::download(
+            // new \App\Exports\InventoryReportExport($reportData, $itemType ?? 'all'),
+            // $filename
+            new \App\Exports\InventoryReportExport(
+                $reportData,
+                $itemType ?? 'all',
+                auth()->user()->name  // 👈 add this
+            ),
+            $filename
+        );
     }
 
     public function expenseReportIndex()

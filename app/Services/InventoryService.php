@@ -71,6 +71,8 @@ class InventoryService
 
     public function store(Request $request)
     {
+        Log::info('Storing new inventory item');
+        Log::info($request->all());
         $request->validate([
             'name' => 'required|string|max:255',
             'category_id' => 'required|exists:inventory_categories,id',
@@ -78,6 +80,15 @@ class InventoryService
             'current_quantity' => 'required|numeric|min:0',
             'unit_price' => 'nullable|numeric|min:0',
         ]);
+
+        $value_type = null;
+        if($request->is_dry == 1) {
+            $value_type = 1;
+        } elseif($request->is_dry == 0) {
+            $value_type = 0; // wet ingredient
+        } else {
+            $value_type = null; // not specified
+        }
 
         $created_item = InventoryItem::create([
             'name' => $request->name,
@@ -88,6 +99,8 @@ class InventoryService
             'created_by' => auth()->id(),
             'updated_by' => null,
             'orderable' => $request->orderable,
+            'is_dry' => $value_type,
+            'remarks' => $request->remarks ?? null,
         ]);
 
         if ($created_item) {

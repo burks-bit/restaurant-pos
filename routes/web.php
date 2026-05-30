@@ -172,6 +172,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/reports/inventory', [InventoryController::class, 'inventoryReportIndex'])->name('inventory.report.index');
         Route::get('/reports/fetch-inventory-report', [ReportController::class, 'fetchInventoryReport'])->name('inventory.fetch-inventory-report');
         Route::get('/reports/print-inventory-report-pdf', [ReportController::class, 'printInventoryReport'])->name('inventory.print-inventory-report-pdf');
+        Route::get('/reports/inventory/export-excel', [ReportController::class, 'exportInventoryReportExcel'])->name('inventory.export-inventory-report-excel');
     };
 
     $expenseReportRoutes = function () {

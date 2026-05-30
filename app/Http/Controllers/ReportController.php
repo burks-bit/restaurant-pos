@@ -151,4 +151,14 @@ class ReportController extends Controller
             return back()->with('error', 'Failed to print sales report.');
         }
     }
+
+    public function exportInventoryReportExcel(Request $request)
+    {
+        try {
+            return $this->reportService->exportInventoryReportExcel($request);
+        } catch (\Throwable $e) {
+            Log::error('ReportController@exportInventoryReportExcel failed: ' . $e->getMessage());
+            return back()->with('error', 'Failed to print inventory report.');
+        }
+    }
 }

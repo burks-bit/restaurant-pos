@@ -184,7 +184,7 @@
         >
           <div class="bg-white rounded-lg w-full max-w-md p-6">
             <h2 class="text-xl font-semibold text-gray-900 mb-4 flex items-center gap-2">
-              <i class="fa fa-plus"></i> Add New Inventory Item
+              Add New Inventory Item
             </h2>
 
             <form class="space-y-4" @submit.prevent="submitAddItem">
@@ -196,6 +196,19 @@
                   class="w-full border-gray-300 rounded px-3 py-2 text-sm"
                   required
                 />
+              </div>
+
+              <div>
+                <label class="block text-sm font-medium mb-1">is Dry item?</label>
+                <select
+                  v-model="newItem.is_dry"
+                  class="w-full border-gray-300 rounded px-3 py-2 text-sm"
+                  required
+                >
+                  <option value="" disabled>Select</option>
+                  <option value="0">Wet Ingredient</option>
+                  <option value="1">Dry Ingredient</option>
+                </select>
               </div>
 
               <div>
@@ -226,8 +239,9 @@
                 <label class="block text-sm font-medium mb-1">Current Quantity</label>
                 <input
                   type="number"
-                  v-model="newItem.current_quantity"
+                  v-model.number="newItem.current_quantity"
                   min="0"
+                  step="0.01"
                   class="w-full border-gray-300 rounded px-3 py-2 text-sm"
                   required
                 />
@@ -237,10 +251,20 @@
                 <label class="block text-sm font-medium mb-1">Unit Price (₱)</label>
                 <input
                   type="number"
-                  v-model="newItem.unit_price"
+                  v-model.number="newItem.unit_price"
                   min="0"
                   step="0.01"
                   class="w-full border-gray-300 rounded px-3 py-2 text-sm"
+                />
+              </div>
+
+              <div>
+                <label class="block text-sm font-medium mb-1">Remarks</label>
+                <input
+                  type="text"
+                  v-model="newItem.remarks"
+                  class="w-full border-gray-300 rounded px-3 py-2 text-sm"
+                  required
                 />
               </div>
 

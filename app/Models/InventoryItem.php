@@ -16,7 +16,14 @@ class InventoryItem extends Model
         'orderable',
         'status',
         'created_by',
-        'updated_by'
+        'updated_by',
+        'is_dry',
+        'remarks',
+    ];
+
+    protected $casts = [
+        'unit_price' => 'decimal:2', // or 'float'
+        'current_quantity' => 'decimal:1',
     ];
 
     public function category()

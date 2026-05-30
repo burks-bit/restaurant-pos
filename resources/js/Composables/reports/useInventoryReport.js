@@ -11,6 +11,7 @@ export function useInventoryReport() {
 
   const selectedCategory = ref('')
   const InventoryRpType = ref('')
+  const InventoryItemType = ref('')
   const startDate = ref('')
   const endDate = ref('')
 
@@ -22,6 +23,10 @@ export function useInventoryReport() {
       alert('Please select a report type first.')
       return
     }
+    if (!InventoryItemType.value) {
+      alert('Please select an item type first.')
+      return
+    }
 
     try {
       isLoading.value = true
@@ -31,6 +36,7 @@ export function useInventoryReport() {
         {
           params: {
             type: InventoryRpType.value,
+            item_type: InventoryItemType.value,
             start_date: startDate.value,
             end_date: endDate.value,
             category_id: selectedCategory.value || '',
@@ -55,6 +61,7 @@ export function useInventoryReport() {
 
     const url = route(`${prefix.value}.inventory.print-inventory-report-pdf`, {
       type: InventoryRpType.value,
+      item_type: InventoryItemType.value,
       start_date: startDate.value,
       end_date: endDate.value,
       category_id: selectedCategory.value || '',
@@ -63,15 +70,34 @@ export function useInventoryReport() {
     window.open(url, '_blank')
   }
 
+  const generateExcelReport = () => {
+    if (inventoryMovements.value.length === 0) {
+      alert('No data to export. Please fetch data first.')
+      return
+    }
+
+    const url = route(`${prefix.value}.inventory.export-inventory-report-excel`, {
+      type: InventoryRpType.value,
+      item_type: InventoryItemType.value,
+      start_date: startDate.value,
+      end_date: endDate.value,
+      category_id: selectedCategory.value || '',
+    })
+
+    window.location.href = url  // triggers file download
+  }
+
   return {
     categories,
     selectedCategory,
     InventoryRpType,
+    InventoryItemType,
     startDate,
     endDate,
     isLoading,
     inventoryMovements,
     fetchInventoryMovements,
     generatePdfReport,
+    generateExcelReport
   }
 }

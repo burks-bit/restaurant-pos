@@ -34,7 +34,7 @@
     <table>
         <thead>
             <tr>
-                <th class="text-center">ID</th>
+                <!-- <th class="text-center">ID</th> -->
                 <th>Category</th>
                 <th>Item</th>
                 <th>Unit</th>
@@ -56,7 +56,7 @@
                     $grandTotal += $cost;
                 @endphp
                 <tr>
-                    <td class="text-center">{{ $movement['id'] }}</td>
+                    <!-- <td class="text-center">{{ $movement['id'] }}</td> -->
                     <td>{{ $movement['category'] }}</td>
                     <td>{{ $movement['name'] }}</td>
                     <td>{{ $movement['unit'] }}</td>
@@ -73,7 +73,7 @@
             @endforeach
             @if($reportData->isEmpty())
                 <tr>
-                    <td colspan="9" class="text-center">No records found</td>
+                    <td colspan="8" class="text-center">No records found</td>
                 </tr>
             @endif
         </tbody>
@@ -82,7 +82,7 @@
             <tr class="total-row">
                 <td colspan="7" class="text-right">Grand Total (₱):</td>
                 <td class="text-right">{{ number_format($grandTotal, 2) }}</td>
-                <td></td>
+                <!-- <td></td> -->
             </tr>
         </tfoot>
         @endif

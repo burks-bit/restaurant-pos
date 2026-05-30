@@ -27,8 +27,10 @@ export function useInventoryItems() {
     category_id: '',
     unit: '',
     current_quantity: 0,
-    unit_price: 0,
+    unit_price: 0.00,
     orderable: 0,
+    is_dry: 0,
+    remarks: '',
   })
 
   const resetStockForm = () => {
@@ -45,8 +47,10 @@ export function useInventoryItems() {
       category_id: '',
       unit: '',
       current_quantity: 0,
-      unit_price: 0,
+      unit_price: 0.00,
       orderable: 0,
+      is_dry: 0,
+      remarks: '',
     }
   }
 
