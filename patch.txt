@@ -1,15 +1,24 @@
-InventoryItem.php
+InventoryReportExport.php
+
 InventoryReport.vue
-useInventoryReport.js
 Items.vue
+Index.vue -> inventory
+
+useInventoryReport.js
 useInventoryItems.js
+useInventorySummary.js
+
+InventoryReport.blade.php
+
+ReportController.php
+InventoryController.php
+
+InventoryItem.php
+InventoryMovement.php
+
 InventoryService.php
 ReportService.php
-ReportController.php
+
 web.php
-InventoryReportExport.php
-InventoryReport.blade.php
-InventoryMovement.php
-useInventorySummary.js
-Index.vue -> inventory
-InventoryController.php
+
+added adjustment_type in inventory_movements
