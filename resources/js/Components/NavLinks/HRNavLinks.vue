@@ -64,6 +64,12 @@ const toggle = () => {
       >
         <ul v-show="employeeOpen" class="overflow-hidden space-y-1">
           <li>
+              <Link :href="route('hr.employees.daily-logs')" class="pl-8 block px-2 py-1.5 rounded-base hover:bg-gray-200 flex items-center space-x-2">
+                <i class="fa fa-clock"></i>
+                <span>Logs</span>
+              </Link>
+          </li>
+          <li>
             <Link :href="route('hr.employees.index')" 
               class="pl-8 block px-2 py-1.5 rounded-base hover:bg-gray-200 flex items-center space-x-2">
               <i class="fa fa-user"></i>

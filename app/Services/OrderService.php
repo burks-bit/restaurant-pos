@@ -80,9 +80,6 @@ class OrderService
 
         $payment_methods = PaymentMethod::where('is_active', 1)->get();
 
-        Log::info('orders with payments');
-        Log::info($orders->toArray());
-
         return Inertia::render('Orders/Index', [
             'orders' => $orders,
             'payment_methods' => $payment_methods,
@@ -139,8 +136,6 @@ class OrderService
 
     public function store(Request $request)
     {
-        Log::info('OrderService Store');
-        Log::info($request->all());
 
         $request->validate([
             'table_session_id' => 'required|exists:table_sessions,id',
@@ -174,10 +169,6 @@ class OrderService
                 ])
                 ->lockForUpdate()
                 ->findOrFail($request->table_session_id);
-
-            Log::info('------------- table session with addons ----------------');
-            Log::info($tableSession);
-            Log::info('------------- table session with addons ----------------');
 
             if ($tableSession->status !== 'open') {
                 throw new \Exception('Table session already closed.');
@@ -434,9 +425,6 @@ class OrderService
 
     public function store_orig_03222026(Request $request)
     {
-        Log::info('OrderService Store');
-        Log::info($request->all());
-
         $request->validate([
             'table_session_id' => 'required|exists:table_sessions,id',
             'heads' => 'required|array|min:1',
@@ -454,9 +442,6 @@ class OrderService
                 ])
                 ->lockForUpdate()
                 ->findOrFail($request->table_session_id);
-            Log::info('------------- table session with addons ----------------');
-            Log::info($tableSession);
-            Log::info('------------- table session with addons ----------------');
 
             if ($tableSession->status !== 'open') {
                 throw new \Exception('Table session already closed.');
@@ -597,8 +582,6 @@ class OrderService
 
     public function store_orig_03132026(Request $request)
     {
-        Log::info('OrderService Store');
-        Log::info($request);
         $request->validate([
             'table_session_id' => 'required|exists:table_sessions,id',
             'heads' => 'required|array|min:1',
@@ -736,9 +719,6 @@ class OrderService
 
     public function storeOrderedItems(Request $request)
     {
-        Log::info('store ordered items');
-        Log::info($request->all());
-
         $request->validate([
             'cart' => 'required|array|min:1',
             'cart.*.id' => 'required|exists:inventory_items,id',
@@ -920,9 +900,6 @@ class OrderService
 
     public function storeOrderedItems_orig05152026(Request $request)
     {
-        Log::info('store ordered items');
-        Log::info($request->all());
-
         $request->validate([
             'cart' => 'required|array|min:1',
             'cart.*.id' => 'required|exists:inventory_items,id',
@@ -1089,9 +1066,6 @@ class OrderService
 
     public function storeOrderedItems_Orig(Request $request)
     {
-        Log::info('store ordered items');
-        Log::info($request->all());
-
         $request->validate([
             'table_session_id' => 'required|exists:table_sessions,id',
             'cart' => 'required|array|min:1',
@@ -1625,9 +1599,6 @@ class OrderService
 
     public function storeTableSessionAddons_orig(Request $request)
     {
-        \Log::info('OrderService@storeTableSessionAddons');
-        \Log::info($request->all());
-
         $request->validate([
             'table_session_id'        => 'required|exists:table_sessions,id',
             'add_ons'                 => 'required|array|min:1',
@@ -1653,10 +1624,6 @@ class OrderService
             DB::transaction(function () use ($request, $tableSession) {
                 foreach ($request->add_ons as $addon) {
                     $inventoryItem = InventoryItem::find($addon['item_id']);
-
-                    Log::info('================storeTableSessionAddons =========================');
-                    Log::info($inventoryItem);
-                    Log::info('================storeTableSessionAddons =========================');
 
                     $quantity  = (float) $addon['qty'];
                     $unitPrice = (float) ($inventoryItem?->unit_price ?? $addon['price']);
@@ -1698,9 +1665,6 @@ class OrderService
 
     public function storeTableSessionAddons(Request $request)
     {
-        Log::info('OrderService@storeTableSessionAddons');
-        Log::info($request->all());
-
         $request->validate([
             'table_session_id'        => 'required|exists:table_sessions,id',
             'add_ons'                 => 'required|array|min:1',
@@ -1732,10 +1696,6 @@ class OrderService
                     if (!$dbItem) {
                         throw new \Exception('Inventory item not found.');
                     }
-
-                    Log::info('================ storeTableSessionAddons ========================');
-                    Log::info($dbItem);
-                    Log::info('================ storeTableSessionAddons ========================');
 
                     if ((float) $dbItem->current_quantity < $qty) {
                         throw new \Exception("Insufficient stock for {$dbItem->name}. Available: {$dbItem->current_quantity}");
@@ -1797,12 +1757,6 @@ class OrderService
 
     public function voidTableSessionAddon(Request $request, $addonId)
     {
-        Log::info('OrderService@voidTableSessionAddon');
-        Log::info([
-            'addon_id' => $addonId,
-            'payload'  => $request->all(),
-        ]);
-
         $request->validate([
             'table_session_id' => 'required|exists:table_sessions,id',
             'void_qty'         => 'required|numeric|min:1',
@@ -1853,19 +1807,6 @@ class OrderService
                 $remainingQty = (float) $addon->quantity - $voidQty;
                 $unitPrice = (float) $addon->unit_price;
                 $restockedQty = (float) $inventoryItem->current_quantity + $voidQty;
-
-                Log::info('================ voidTableSessionAddon ========================');
-                Log::info([
-                    'table_session_id' => $tableSession->id,
-                    'addon_id'         => $addon->id,
-                    'inventory_item_id'=> $inventoryItem->id,
-                    'current_addon_qty'=> $addon->quantity,
-                    'void_qty'         => $voidQty,
-                    'remaining_qty'    => $remainingQty,
-                    'inventory_before' => $inventoryItem->current_quantity,
-                    'inventory_after'  => $restockedQty,
-                ]);
-                Log::info('================ voidTableSessionAddon ========================');
 
                 if ($remainingQty <= 0) {
                     $addon->update([

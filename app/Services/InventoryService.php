@@ -71,8 +71,6 @@ class InventoryService
 
     public function store(Request $request)
     {
-        Log::info('Storing new inventory item');
-        Log::info($request->all());
         $request->validate([
             'name' => 'required|string|max:255',
             'category_id' => 'required|exists:inventory_categories,id',
@@ -178,9 +176,6 @@ class InventoryService
 
     public function printGeneralReport(Request $request)
     {
-        Log::info('Inventory General Report');
-        Log::info($request->all());
-
         $reportType = $request->query('type', 'all');
         $startDate  = $request->query('start_date');
         $endDate    = $request->query('end_date');
@@ -302,8 +297,6 @@ class InventoryService
 
     public function physicalCount(Request $request, InventoryItem $item)
     {
-        Log::info('Performing physical count for item ID: ' . $item->id);
-        Log::info($request->all());
         $request->validate([
             'quantity'        => 'required|numeric|min:0',
             'adjustment_type' => 'required|string',

@@ -83,10 +83,6 @@ class TableService
 
     public function assignTable(Request $request, $tableId)
     {
-        Log::info('assign table');
-        Log::info($request->all());
-        Log::info($tableId);
-
         $request->validate([
             'guests_count' => 'required|integer|min:1',
             'customer_name' => 'required|string|max:255',
@@ -102,8 +98,6 @@ class TableService
         $openSessions = TableSession::where('table_id', $tableId)
             ->where('status', 'open')
             ->get();
-
-        Log::info('openSessions count: ' . $openSessions->count());
 
         if ($openSessions->isNotEmpty()) {
             $sameCustomerExists = $openSessions->contains(function ($session) use ($customerName) {
@@ -202,77 +196,6 @@ class TableService
         ]);
     }
 
-    // public function assignTable(Request $request, $tableId)
-    // {
-    //     Log::info('assign table');
-    //     Log::info($request->all());
-    //     Log::info($tableId);
-
-    //     $request->validate([
-    //         'guests_count' => 'required|integer|min:1',
-    //         'head_rule_counts' => 'nullable|array',
-    //         'head_rule_counts.*' => 'integer|min:0',
-    //     ]);
-
-    //     $existingOpenSession = TableSession::where('table_id', $tableId)
-    //         ->where('status', 'open')
-    //         ->exists();
-
-    //     Log::info('existingOpenSession');
-    //     Log::info($existingOpenSession);
-
-    //     if ($existingOpenSession) {
-    //         return response()->json([
-    //             'message' => 'Table is already occupied.'
-    //         ], 422);
-    //     }
-
-    //     $session = DB::transaction(function () use ($request, $tableId) {
-    //         $today = now()->format('Ymd');
-
-    //         $lastSession = TableSession::whereDate('created_at', today())
-    //             ->orderBy('id', 'desc')
-    //             ->first();
-
-    //         $increment = $lastSession
-    //             ? str_pad(((int) substr($lastSession->ref_no, -3)) + 1, 3, '0', STR_PAD_LEFT)
-    //             : '001';
-
-    //         $table_ref_no = "TBL-{$today}-{$increment}";
-
-    //         $session = TableSession::create([
-    //             'ref_no' => $table_ref_no,
-    //             'table_id' => $tableId,
-    //             'pax' => $request->guests_count,
-    //             'status' => 'open',
-    //             'frontdoor_id' => auth()->id(),
-    //             'cashier_id' => null,
-    //             'order_id' => null,
-    //             'total_amount' => 0,
-    //             'customer_name' => $request->customer_name,
-    //         ]);
-
-    //         if ($request->filled('head_rule_counts')) {
-    //             foreach ($request->head_rule_counts as $headId => $count) {
-    //                 $rule = HeadPricingRule::find($headId);
-    //                 $session->headCounts()->create([
-    //                     'head_pricing_rule_id' => $headId,
-    //                     'qty' => $count,
-    //                     'price_snapshot' => $rule->price,
-    //                     'subtotal' => $rule->price * $count
-    //                 ]);
-    //             }
-    //         }
-
-    //         return $session;
-    //     });
-
-    //     return response()->json([
-    //         'success' => true,
-    //         'table_session' => $session->load(['table', 'cashier', 'order', 'headCounts.headRule'])
-    //     ]);
-    // }
-
     public function get_tables_for_admission(Request $request)
     {   
         $pricing_schemes = PricingScheme::with([
@@ -337,9 +260,6 @@ class TableService
 
     public function admitTable(Request $request, $tableId = null)
     {
-        Log::info('assign table');
-        Log::info($request->all());
-        Log::info(['route_table_id' => $tableId]);
 
         $isSingleAdmission = $request->filled('table_id');
         $isGroupAdmission = $request->filled('parent_table_id');
@@ -387,8 +307,6 @@ class TableService
             $existingOpenSession = TableSession::where('table_id', $resolvedTableId)
                 ->where('status', 'open')
                 ->exists();
-
-            Log::info('existingOpenSession', ['exists' => $existingOpenSession]);
 
             if ($existingOpenSession) {
                 return response()->json([
@@ -651,226 +569,6 @@ class TableService
         ]);
     }
 
-    // public function admitTable(Request $request, $tableId = null)
-    // {
-    //     Log::info('assign table');
-    //     Log::info($request->all());
-    //     Log::info(['route_table_id' => $tableId]);
-
-    //     $isSingleAdmission = $request->filled('table_id');
-    //     $isGroupAdmission = $request->filled('parent_table_id');
-
-    //     if (!$isSingleAdmission && !$isGroupAdmission) {
-    //         return response()->json([
-    //             'success' => false,
-    //             'message' => 'Invalid admission payload.'
-    //         ], 422);
-    //     }
-
-    //     $request->validate([
-    //         // single
-    //         'table_id' => 'nullable|integer|exists:tables,id',
-    //         'rule_id' => 'nullable|integer|exists:head_pricing_rules,id',
-
-    //         // group
-    //         'parent_table_id' => 'nullable|integer|exists:tables,id',
-    //         'rule_counts' => 'nullable|array',
-    //         'rule_counts.*' => 'nullable|integer|min:0',
-    //         'pricing_breakdown' => 'nullable|array',
-    //         'pricing_breakdown.*.rule_id' => 'required_with:pricing_breakdown|integer|exists:head_pricing_rules,id',
-    //         'pricing_breakdown.*.qty' => 'required_with:pricing_breakdown|integer|min:1',
-    //         'pricing_breakdown.*.price' => 'nullable|numeric|min:0',
-    //         'pricing_breakdown.*.line_total' => 'nullable|numeric|min:0',
-
-    //         // common
-    //         'customer_name' => 'nullable|string|max:255',
-    //         'remarks' => 'nullable|string|max:1000',
-    //         'pax' => 'required|integer|min:1',
-    //     ]);
-
-    //     $resolvedTableId = $isSingleAdmission
-    //         ? (int) $request->table_id
-    //         : (int) $request->parent_table_id;
-
-    //     if ($tableId !== null && (int) $tableId !== $resolvedTableId) {
-    //         return response()->json([
-    //             'success' => false,
-    //             'message' => 'Route table ID does not match request table ID.'
-    //         ], 422);
-    //     }
-
-    //     $existingOpenSession = TableSession::where('table_id', $resolvedTableId)
-    //         ->where('status', 'open')
-    //         ->exists();
-
-    //     Log::info('existingOpenSession', ['exists' => $existingOpenSession]);
-
-    //     if ($existingOpenSession) {
-    //         return response()->json([
-    //             'success' => false,
-    //             'message' => 'Table is already occupied.'
-    //         ], 422);
-    //     }
-
-    //     $session = DB::transaction(function () use ($request, $resolvedTableId, $isSingleAdmission, $isGroupAdmission) {
-    //         $today = now()->format('Ymd');
-
-    //         $lastSession = TableSession::whereDate('created_at', today())
-    //             ->orderBy('id', 'desc')
-    //             ->first();
-
-    //         $increment = $lastSession
-    //             ? str_pad(((int) substr($lastSession->ref_no, -3)) + 1, 3, '0', STR_PAD_LEFT)
-    //             : '001';
-
-    //         $table_ref_no = "TBL-{$today}-{$increment}";
-
-    //         $totalAmount = 0;
-
-    //         if ($isSingleAdmission) {
-    //             $totalAmount = (float) ($request->price ?? 0);
-    //         }
-
-    //         if ($isGroupAdmission) {
-    //             $totalAmount = (float) ($request->estimated_total ?? 0);
-    //         }
-
-    //         $session = TableSession::create([
-    //             'ref_no' => $table_ref_no,
-    //             'table_id' => $resolvedTableId,
-    //             'pax' => (int) $request->pax,
-    //             'status' => 'open',
-    //             'frontdoor_id' => auth()->id(),
-    //             'cashier_id' => null,
-    //             'order_id' => null,
-    //             'total_amount' => $totalAmount,
-    //             'customer_name' => $request->customer_name,
-    //             // remarks not included here because your current code/table may not have it
-    //         ]);
-
-    //         /*
-    //         |--------------------------------------------------------------------------
-    //         | SINGLE ADMISSION
-    //         |--------------------------------------------------------------------------
-    //         | Payload:
-    //         | {
-    //         |   table_id,
-    //         |   pax: 1,
-    //         |   rule_id,
-    //         |   price,
-    //         |   pricing_rule
-    //         | }
-    //         */
-    //         if ($isSingleAdmission && $request->filled('rule_id')) {
-    //             $rule = HeadPricingRule::findOrFail($request->rule_id);
-
-    //             $qty = max((int) $request->pax, 1);
-    //             $priceSnapshot = (float) $rule->price;
-    //             $subtotal = $priceSnapshot * $qty;
-
-    //             $session->headCounts()->create([
-    //                 'head_pricing_rule_id' => $rule->id,
-    //                 'qty' => $qty,
-    //                 'price_snapshot' => $priceSnapshot,
-    //                 'subtotal' => $subtotal,
-    //             ]);
-
-    //             if ((float) $session->total_amount !== (float) $subtotal) {
-    //                 $session->update([
-    //                     'total_amount' => $subtotal,
-    //                 ]);
-    //             }
-    //         }
-
-    //         /*
-    //         |--------------------------------------------------------------------------
-    //         | GROUP ADMISSION
-    //         |--------------------------------------------------------------------------
-    //         | Payload:
-    //         | {
-    //         |   parent_table_id,
-    //         |   pax,
-    //         |   estimated_total,
-    //         |   rule_counts,
-    //         |   pricing_breakdown
-    //         | }
-    //         */
-    //         if ($isGroupAdmission) {
-    //             $breakdown = collect($request->pricing_breakdown ?? []);
-
-    //             if ($breakdown->isNotEmpty()) {
-    //                 foreach ($breakdown as $item) {
-    //                     $ruleId = (int) ($item['rule_id'] ?? 0);
-    //                     $qty = (int) ($item['qty'] ?? 0);
-
-    //                     if ($ruleId <= 0 || $qty <= 0) {
-    //                         continue;
-    //                     }
-
-    //                     $rule = HeadPricingRule::findOrFail($ruleId);
-    //                     $priceSnapshot = (float) $rule->price;
-    //                     $subtotal = $priceSnapshot * $qty;
-
-    //                     $session->headCounts()->create([
-    //                         'head_pricing_rule_id' => $rule->id,
-    //                         'qty' => $qty,
-    //                         'price_snapshot' => $priceSnapshot,
-    //                         'subtotal' => $subtotal,
-    //                     ]);
-    //                 }
-
-    //                 $computedTotal = (float) $session->headCounts()->sum('subtotal');
-
-    //                 if ((float) $session->total_amount !== $computedTotal) {
-    //                     $session->update([
-    //                         'total_amount' => $computedTotal,
-    //                     ]);
-    //                 }
-    //             } elseif ($request->filled('rule_counts')) {
-    //                 foreach ($request->rule_counts as $ruleId => $qty) {
-    //                     $ruleId = (int) $ruleId;
-    //                     $qty = (int) $qty;
-
-    //                     if ($ruleId <= 0 || $qty <= 0) {
-    //                         continue;
-    //                     }
-
-    //                     $rule = HeadPricingRule::findOrFail($ruleId);
-    //                     $priceSnapshot = (float) $rule->price;
-    //                     $subtotal = $priceSnapshot * $qty;
-
-    //                     $session->headCounts()->create([
-    //                         'head_pricing_rule_id' => $rule->id,
-    //                         'qty' => $qty,
-    //                         'price_snapshot' => $priceSnapshot,
-    //                         'subtotal' => $subtotal,
-    //                     ]);
-    //                 }
-
-    //                 $computedTotal = (float) $session->headCounts()->sum('subtotal');
-
-    //                 if ((float) $session->total_amount !== $computedTotal) {
-    //                     $session->update([
-    //                         'total_amount' => $computedTotal,
-    //                     ]);
-    //                 }
-    //             }
-    //         }
-
-    //         return $session;
-    //     });
-
-    //     return response()->json([
-    //         'success' => true,
-    //         'table_session' => $session->load([
-    //             'table',
-    //             'cashier',
-    //             'order',
-    //             'headCounts.headRule'
-    //         ])
-    //     ]);
-    // }
-
     public function vacantTable(Request $request, Table $table)
     {
         $request->validate([
@@ -887,14 +585,6 @@ class TableService
                     ->where('status', 'open')
                     ->lockForUpdate()
                     ->first();
-
-                Log::info('vacantTable request', $request->all());
-                Log::info('open session found', [
-                    'session_id'  => $session?->id,
-                    'status'      => $session?->status,
-                    'order_id'    => $session?->order_id,
-                    'cashier_id'  => $session?->cashier_id,
-                ]);
 
                 // OCCUPIED
                 if ($request->status === 'occupied') {
@@ -932,12 +622,6 @@ class TableService
 
                 // block vacancy if not yet settled
                 if (is_null($session->order_id) || is_null($session->cashier_id)) {
-                    Log::info('vacantTable blocked', [
-                        'reason'     => 'order_id or cashier_id is null',
-                        'order_id'   => $session->order_id,
-                        'cashier_id' => $session->cashier_id,
-                    ]);
-
                     return [
                         'success' => false,
                         'message' => 'Cannot vacant table. Customer is still dining or payment is not yet settled.',
@@ -946,11 +630,6 @@ class TableService
                 }
 
                 if ($session->order && isset($session->order->payment_status) && $session->order->payment_status !== 'paid') {
-                    Log::info('vacantTable blocked', [
-                        'reason' => 'payment_status not paid',
-                        'payment_status' => $session->order->payment_status,
-                    ]);
-
                     return [
                         'success' => false,
                         'message' => 'Cannot vacant table. Order is not yet fully paid.',
@@ -963,18 +642,7 @@ class TableService
                     'closed_at' => now(),
                 ]);
 
-                Log::info('session close update result', [
-                    'updated' => $updated,
-                    'session_id' => $session->id,
-                ]);
-
                 $session->refresh();
-
-                Log::info('session after refresh', [
-                    'session_id' => $session->id,
-                    'status'     => $session->status,
-                    'closed_at'  => $session->closed_at,
-                ]);
 
                 return [
                     'success' => true,
@@ -1005,10 +673,6 @@ class TableService
 
     public function cancelQueuedTable(Request $request, Table $table)
     {
-        // Log::info('cancelQueuedTable');
-        // Log::info($request->all());
-        // Log::info($table);
-
         $request->validate([
             'remarks' => 'required|string|max:1000',
             'manager_id' => 'required|exists:users,id',

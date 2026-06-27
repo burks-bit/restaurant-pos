@@ -31,6 +31,7 @@ class ReservationService
                 'reservations'    => $reservations,
                 'pricing_schemes' => PricingScheme::where('is_active', true)->get(),
                 'pricing_rules'   => HeadPricingRule::where('is_active', true)->get(),
+                'shifts'   => Shift::get(),
             ]);
         } catch (\Throwable $e) {
             Log::error('ReservationService@index failed: ' . $e->getMessage());
@@ -57,6 +58,7 @@ class ReservationService
             'pax_breakdown.*.price_snapshot' => 'required|numeric|min:0',
             'pax_breakdown.*.subtotal'       => 'required|numeric|min:0',
             'pax'                    => 'required|integer|min:1',
+            'shift_id'               => 'required|exists:shifts,id',
         ]);
 
         DB::transaction(function () use ($data) {
@@ -72,6 +74,7 @@ class ReservationService
                 'reservation_fee'      => $data['reservation_fee'] ?? 0,
                 'fee_payment_method'   => $data['fee_payment_method'] ?? null,
                 'fee_reference_no'     => $data['fee_reference_no'] ?? null,
+                'shift_id'             => $data['shift_id'] ?? null,
             ]);
 
             foreach ($data['pax_breakdown'] as $row) {
@@ -129,9 +132,11 @@ class ReservationService
 
             })->first();
 
+            $cashierIdOnDuty = Order::getCashierIdOnDuty($now, $data['shift_id'] ?? null);
+
             // --- 4. Create Order ---
             $order = Order::create([
-                'user_id'          => auth()->id(),
+                'user_id'          => $cashierIdOnDuty,
                 'order_no'         => $orderNo,
                 'subtotal'         => $data['reservation_fee'],
                 'total_discount'   => 0,
@@ -149,7 +154,7 @@ class ReservationService
                 'table_number'                   => null,
                 'discount_approving_manager_id'  => null,
                 'cancel_approving_manager_id'    => null,
-                'shift_id'                       => $current_shift ? $current_shift->id : null,
+                'shift_id'                       => $data['shift_id'] ?? null,
                 'reservation_fee_used'           => $data['reservation_fee'] ?? 0,
                 // tie back to the reservation if your orders table has this column:
                 'reservation_id'              => $reservation->id,
@@ -162,7 +167,6 @@ class ReservationService
                 // Resolve the PaymentMethod model from the free-text fee_payment_method string,
                 // or fall back to null-safe checks below.
                 $paymentMethod = PaymentMethod::where('code', 'reservation_fee')->first();
-                // Log::info('payment method: ' . $paymentMethod);
                 OrderPayment::create([
                     'order_id'         => $order->id,
                     'payment_method_id' => $paymentMethod?->id,
@@ -180,55 +184,6 @@ class ReservationService
 
         return redirect()->back()->with('success', 'Reservation created.');
     }
-
-    // public function store(Request $request)
-    // {
-    //     $data = $request->validate([
-    //         'name'                   => 'required|string|max:191',
-    //         'pricing_scheme_id'      => 'required|exists:pricing_schemes,id',
-    //         'reservation_datetime'   => 'required|date',
-    //         'contact_number'         => 'nullable|string|max:191',
-    //         'remarks'                => 'nullable|string',
-    //         'status'                 => 'in:pending,confirmed,cancelled',
-    //         'reservation_fee'        => 'nullable|numeric|min:0',
-    //         'fee_payment_method'     => 'nullable|string|max:191',
-    //         'fee_reference_no'       => 'nullable|string|max:191',
-    //         'pax_breakdown'          => 'required|array|min:1',
-    //         'pax_breakdown.*.head_pricing_rule_id' => 'required|exists:head_pricing_rules,id',
-    //         'pax_breakdown.*.qty'            => 'required|integer|min:0',
-    //         'pax_breakdown.*.price_snapshot' => 'required|numeric|min:0',
-    //         'pax_breakdown.*.subtotal'       => 'required|numeric|min:0',
-    //         'pax'                    => 'required|integer|min:1',
-    //     ]);
- 
-    //     DB::transaction(function () use ($data) {
-    //         $reservation = Reservation::create([
-    //             'name'                 => $data['name'],
-    //             'pricing_scheme_id'    => $data['pricing_scheme_id'],
-    //             'pax'                  => $data['pax'],
-    //             'reservation_datetime' => $data['reservation_datetime'],
-    //             'contact_number'       => $data['contact_number'],
-    //             'remarks'              => $data['remarks'] ?? null,
-    //             'status'               => $data['status'] ?? 'pending',
-    //             'reservation_fee'      => $data['reservation_fee'] ?? 0,
-    //             'fee_payment_method'   => $data['fee_payment_method'] ?? null,
-    //             'fee_reference_no'     => $data['fee_reference_no'] ?? null,
-    //         ]);
- 
-    //         foreach ($data['pax_breakdown'] as $row) {
-    //             if ($row['qty'] > 0) {
-    //                 $reservation->reservationPax()->create([
-    //                     'head_pricing_rule_id' => $row['head_pricing_rule_id'],
-    //                     'qty'                  => $row['qty'],
-    //                     'price_snapshot'       => $row['price_snapshot'],
-    //                     'subtotal'             => $row['subtotal'],
-    //                 ]);
-    //             }
-    //         }
-    //     });
- 
-    //     return redirect()->back()->with('success', 'Reservation created.');
-    // }
  
     public function update(Request $request, Reservation $reservation)
     {
@@ -287,95 +242,5 @@ class ReservationService
         return redirect()->back()->with('success', 'Reservation deleted.');
     }
 
-    // public function store(Request $request)
-    // {
-    //     Log::info('ReservationService@store');
-    //     Log::info($request->all());
-
-    //     $validated = $request->validate([
-    //         'name' => 'required|string|max:255',
-    //         'pax' => 'required|integer|min:1',
-    //         'reservation_datetime' => 'required|date',
-    //         'contact_number' => 'nullable|string|max:255',
-    //         'remarks' => 'nullable|string|max:1000',
-    //         'status' => 'required|in:pending,confirmed,cancelled,completed',
-    //     ]);
-
-    //     try {
-    //         DB::transaction(function () use ($validated) {
-    //             Reservation::create([
-    //                 'name' => $validated['name'],
-    //                 'pax' => $validated['pax'],
-    //                 'reservation_datetime' => $validated['reservation_datetime'],
-    //                 'contact_number' => $validated['contact_number'] ?? null,
-    //                 'remarks' => $validated['remarks'] ?? null,
-    //                 'status' => $validated['status'],
-    //             ]);
-    //         });
-
-    //         return redirect()->back()->with('success', 'Reservation created successfully.');
-    //     } catch (\Throwable $e) {
-    //         Log::error('ReservationService@store failed: ' . $e->getMessage());
-
-    //         return back()->with('error', 'Failed to create reservation.');
-    //     }
-    // }
-
-    // public function update(Request $request, $id)
-    // {
-    //     Log::info('ReservationService@update');
-    //     Log::info([
-    //         'id' => $id,
-    //         'payload' => $request->all(),
-    //     ]);
-
-    //     $validated = $request->validate([
-    //         'name' => 'required|string|max:255',
-    //         'pax' => 'required|integer|min:1',
-    //         'reservation_datetime' => 'required|date',
-    //         'contact_number' => 'nullable|string|max:255',
-    //         'remarks' => 'nullable|string|max:1000',
-    //         'status' => 'required|in:pending,confirmed,cancelled,completed',
-    //     ]);
-
-    //     try {
-    //         DB::transaction(function () use ($validated, $id) {
-    //             $reservation = Reservation::findOrFail($id);
-
-    //             $reservation->update([
-    //                 'name' => $validated['name'],
-    //                 'pax' => $validated['pax'],
-    //                 'reservation_datetime' => $validated['reservation_datetime'],
-    //                 'contact_number' => $validated['contact_number'] ?? null,
-    //                 'remarks' => $validated['remarks'] ?? null,
-    //                 'status' => $validated['status'],
-    //             ]);
-    //         });
-
-    //         return redirect()->back()->with('success', 'Reservation updated successfully.');
-    //     } catch (\Throwable $e) {
-    //         Log::error('ReservationService@update failed: ' . $e->getMessage());
-
-    //         return back()->with('error', 'Failed to update reservation.');
-    //     }
-    // }
-
-    // public function destroy($id)
-    // {
-    //     Log::info('ReservationService@destroy');
-    //     Log::info(['id' => $id]);
-
-    //     try {
-    //         DB::transaction(function () use ($id) {
-    //             $reservation = Reservation::findOrFail($id);
-    //             $reservation->delete();
-    //         });
-
-    //         return redirect()->back()->with('success', 'Reservation deleted successfully.');
-    //     } catch (\Throwable $e) {
-    //         Log::error('ReservationService@destroy failed: ' . $e->getMessage());
-
-    //         return back()->with('error', 'Failed to delete reservation.');
-    //     }
-    // }
+    
 }

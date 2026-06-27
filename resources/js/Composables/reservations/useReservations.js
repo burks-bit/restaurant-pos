@@ -21,6 +21,7 @@ export function useReservations(reservationsSource) {
     reservation_fee: 0,
     fee_payment_method: 'cash',
     fee_reference_no: '',
+    shift_id: null,
   })
 
   const newForm = ref(emptyForm())
@@ -111,6 +112,7 @@ export function useReservations(reservationsSource) {
       reservation_fee: reservation.reservation_fee ?? 0,
       fee_payment_method: reservation.fee_payment_method ?? 'cash',
       fee_reference_no: reservation.fee_reference_no ?? '',
+      shift_id: reservation.shift_id ?? null,
     }
     showEditModal.value = true
   }

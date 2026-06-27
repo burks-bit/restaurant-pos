@@ -39,7 +39,21 @@
               New Employee
             </button>
             <button
-              class="flex items-center gap-1 text-sm bg-purple-600 text-white px-3 py-1.5 rounded hover:bg-purple-700"
+              class="flex items-center gap-1 text-sm bg-gray-800 text-white px-3 py-1.5 rounded hover:bg-gray-700"
+              @click="printPosAccounts"
+            >
+              <span class="fa fa-print"></span>
+              Print POS Accounts
+            </button>
+            <button
+              class="flex items-center gap-1 text-sm bg-gray-800 text-white px-3 py-1.5 rounded hover:bg-gray-700"
+              @click="printEmployeePersonalDetails"
+            >
+              <span class="fa fa-print"></span>
+              Print Employee Personal Details
+            </button>
+            <button
+              class="flex items-center gap-1 text-sm bg-gray-800 text-white px-3 py-1.5 rounded hover:bg-gray-700"
               @click="view201File(selectedEmployee)"
               :disabled="!selectedEmployee"
             >
@@ -1144,6 +1158,14 @@ const {
   showAddEmploymentModal
 } = useEmployeesIndex(props)
 
-console.log(form)
+  const printPosAccounts = () => {
+    const url = route('hr.print-pos-accounts')
+    window.open(url, '_blank')
+  }
+
+  const printEmployeePersonalDetails = () => {
+    const url = route('hr.print-employee-personal-details')
+    window.open(url, '_blank')
+  }
 </script>
 

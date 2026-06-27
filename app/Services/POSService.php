@@ -30,9 +30,6 @@ class POSService
             ->get();
         $payment_methods = PaymentMethod::where('is_active', 1)->get();
 
-        Log::info('tableSessions with addons');
-        Log::info($payment_methods);
-
         $isDiscountAllowed = (int) Configuration::where('name', 'Discounts (SC/PWD)')
             ->value('status') ? 1 : 0;
 

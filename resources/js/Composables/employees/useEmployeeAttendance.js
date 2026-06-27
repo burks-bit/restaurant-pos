@@ -32,17 +32,29 @@ export function useEmployeeAttendance() {
     show: false,
     message: '',
     type: 'success',
+    title: null,
   })
 
-  const showToast = (message, type = 'success') => {
+  const showToast = (message, type = 'success', title = null) => {
     toast.value.message = message
     toast.value.type = type
+    toast.value.title = title
     toast.value.show = true
 
     setTimeout(() => {
       toast.value.show = false
-    }, 3000)
+    }, type === 'error' ? 6000 : 4000) // give errors more time to read
   }
+
+  // const showToast = (message, type = 'success') => {
+  //   toast.value.message = message
+  //   toast.value.type = type
+  //   toast.value.show = true
+
+  //   setTimeout(() => {
+  //     toast.value.show = false
+  //   }, 3000)
+  // }
 
   /* ================= ATTENDANCE MODAL ================= */
   const showModal = ref(false)
@@ -184,21 +196,89 @@ export function useEmployeeAttendance() {
       )
 
       updateSchedule(response.data.schedule)
-      showToast(response.data.message, 'success')
-    } catch (error) {
-      // 👇 add these logs
-      console.error('Clock in error status:', error.response?.status)
-      console.error('Clock in error data:', error.response?.data)
-      console.error('Route used:', route(`${prefix.value}.clockin`))
 
       showToast(
-        error.response?.data?.message ?? 'Clock in failed.',
-        'error'
+        response.data.message,
+        response.data.is_late ? 'warning' : 'success',
+        response.data.is_late ? 'Clocked In (Late)' : 'Clock In Successful'
+      )
+    } catch (error) {
+      console.error('Clock in error status:', error.response?.status)
+      console.error('Clock in error data:', error.response?.data)
+
+      showToast(
+        error.response?.data?.message ?? 'Clock in failed. Please try again or contact IT support.',
+        'error',
+        'Clock In Failed'
       )
     } finally {
       isLoading.value = false
     }
   }
+
+  const clockOut = async (data = null) => {
+    try {
+      isLoading.value = true
+      const config = {}
+
+      if (data instanceof FormData) {
+        config.headers = {
+          'Content-Type': 'multipart/form-data',
+        }
+      }
+
+      const response = await axios.post(
+        route(`${prefix.value}.clockout`),
+        data,
+        config
+      )
+
+      updateSchedule(response.data.schedule)
+      showToast(response.data.message, 'success', 'Clock Out Successful')
+    } catch (error) {
+      showToast(
+        error.response?.data?.message ?? 'Clock out failed. Please try again or contact IT support.',
+        'error',
+        'Clock Out Failed'
+      )
+    } finally {
+      isLoading.value = false
+    }
+  }
+
+  // const clockIn = async (data = null) => {
+  //   try {
+  //     isLoading.value = true
+  //     const config = {}
+
+  //     if (data instanceof FormData) {
+  //       config.headers = {
+  //         'Content-Type': 'multipart/form-data',
+  //       }
+  //     }
+
+  //     const response = await axios.post(
+  //       route(`${prefix.value}.clockin`),
+  //       data,
+  //       config
+  //     )
+
+  //     updateSchedule(response.data.schedule)
+  //     showToast(response.data.message, 'success')
+  //   } catch (error) {
+  //     // 👇 add these logs
+  //     console.error('Clock in error status:', error.response?.status)
+  //     console.error('Clock in error data:', error.response?.data)
+  //     console.error('Route used:', route(`${prefix.value}.clockin`))
+
+  //     showToast(
+  //       error.response?.data?.message ?? 'Clock in failed.',
+  //       'error'
+  //     )
+  //   } finally {
+  //     isLoading.value = false
+  //   }
+  // }
 
   // try {
   //     const response = await axios.post(
@@ -218,35 +298,35 @@ export function useEmployeeAttendance() {
   //   }
   // }
 
-  const clockOut = async (data = null) => {
-    try {
-      isLoading.value = true
-      const config = {}
+  // const clockOut = async (data = null) => {
+  //   try {
+  //     isLoading.value = true
+  //     const config = {}
 
-      // ✅ Only set multipart if there's a photo
-      if (data instanceof FormData) {
-        config.headers = {
-          'Content-Type': 'multipart/form-data',
-        }
-      }
+  //     // ✅ Only set multipart if there's a photo
+  //     if (data instanceof FormData) {
+  //       config.headers = {
+  //         'Content-Type': 'multipart/form-data',
+  //       }
+  //     }
 
-      const response = await axios.post(
-        route(`${prefix.value}.clockout`),
-        data,
-        config
-      )
+  //     const response = await axios.post(
+  //       route(`${prefix.value}.clockout`),
+  //       data,
+  //       config
+  //     )
 
-      updateSchedule(response.data.schedule)
-      showToast(response.data.message, 'success')
-    } catch (error) {
-      showToast(
-        error.response?.data?.message ?? 'Clock out failed.',
-        'error'
-      )
-    } finally {
-      isLoading.value = false
-    }
-  }
+  //     updateSchedule(response.data.schedule)
+  //     showToast(response.data.message, 'success')
+  //   } catch (error) {
+  //     showToast(
+  //       error.response?.data?.message ?? 'Clock out failed.',
+  //       'error'
+  //     )
+  //   } finally {
+  //     isLoading.value = false
+  //   }
+  // }
 
   /* ================= LOGOUT ================= */
   const logout = async () => {

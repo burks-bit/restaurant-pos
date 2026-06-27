@@ -10,6 +10,7 @@ use App\Models\Configuration;
 use App\Models\Branch;
 use App\Models\User;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Arr;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Illuminate\Support\Facades\Log;
@@ -52,8 +53,6 @@ class EmployeeService
             ])
             ->first();
 
-        Log::info('my records: ', ['employee' => $employee]);
-
         return Inertia::render('Employees/Biometrix', [
             'employee' => $employee
         ]);
@@ -61,11 +60,6 @@ class EmployeeService
 
     public function batchStore(Request $request, Employee $employee)
     {
-        Log::info('batchStore');
-        Log::info($request->all());
-        Log::info('dsadsa');
-        Log::info($employee);
-
         $request->validate([
             'start_date' => 'required|date',
             'end_date'   => 'required|date|after_or_equal:start_date',
@@ -121,8 +115,6 @@ class EmployeeService
 
     public function store(Request $request)
     {
-        Log::info('Storing employee with data: ', $request->all());
-
         $request->validate([
             'first_name' => 'required',
             'last_name'  => 'required',
@@ -219,38 +211,68 @@ class EmployeeService
             return redirect()->back()->with('error', 'Employee creation failed.');
         }
     }
-
+    
     public function update(Request $request, $id)
     {
-        Log::info('Updating employee with data: ', $request->all());
-
-        $request->validate([
-            'first_name' => 'required',
-            'last_name'  => 'required',
+        $validated = $request->validate([
+            'first_name'     => 'required|string|max:255',
+            'last_name'      => 'required|string|max:255',
+            'middle_name'    => 'nullable|string|max:255',
+            'email'          => 'nullable|email|max:255',
+            'contact_number' => 'nullable|string|max:50',
+            'birth_date'     => 'nullable|date',
+            'gender'         => 'nullable|string',
+            'address'        => 'nullable|string',
+            'status'         => 'nullable|string',
+            'access'         => 'required|integer',
         ]);
+
+        $roles = User::roles();
+        $roleConstant = (int) $validated['access'];
+
+        if (!array_key_exists($roleConstant, $roles)) {
+            return redirect()->back()->with('error', 'Invalid access role.');
+        }
 
         $employee = Employee::with('employmentDetails')->findOrFail($id);
 
-        $employee->update([
-            'first_name'     => $request->first_name,
-            'last_name'      => $request->last_name,
-            'middle_name'    => $request->middle_name,
-            'email'          => $request->email,
-            'contact_number' => $request->contact_number,
-            'birth_date'     => $request->birth_date,
-            'gender'         => $request->gender,
-            'address'        => $request->address,
-            'status'         => $request->status,
-            'branch_id'      => 1,
-        ]);
+        DB::transaction(function () use ($employee, $validated, $roleConstant) {
+            $employee->update([
+                // ...Arr::except($validated, 'access'),
+                ...$validated,
+                'branch_id' => 1,
+            ]);
+
+            $employee->user()->update([
+                'name'      => $this->buildFullName($validated),
+                'email'     => $this->buildUsername($validated),
+                'role'      => $roleConstant,
+                'branch_id' => 1,
+            ]);
+        });
 
         return redirect()->back()->with('success', 'Employee updated successfully.');
     }
 
+    private function buildFullName(array $data): string
+    {
+        return trim("{$data['first_name']} {$data['middle_name']} {$data['last_name']}");
+    }
+
+    private function buildUsername(array $data): string
+    {
+        $prefix = Configuration::where('name', 'UsernameEmailPrefix')->value('value');
+
+        $middleInitial = !empty($data['middle_name']) ? strtoupper($data['middle_name'][0]) : '';
+        $lastInitial   = !empty($data['last_name']) ? strtoupper($data['last_name'][0]) : '';
+
+        $base = strtolower(str_replace(' ', '', $data['first_name']) . $middleInitial . $lastInitial);
+
+        return $base . $prefix;
+    }
+
     public function newEmployment(Request $request, $id)
     {
-        Log::info('Adding new employment for employee ID: ' . $id, $request->all());
-
         EmploymentDetail::create([
             'employee_id' => $id,
             'position' => $request->position,
@@ -266,12 +288,6 @@ class EmployeeService
 
     public function updateEmployment(Request $request, $employee, $employment)
     {
-        Log::info('Updating employment', [
-            'employee_id' => $employee,
-            'employment_id' => $employment,
-            'data' => $request->all()
-        ]);
-
         $validated = $request->validate([
             'position' => 'required|integer|max:255',
             'department' => 'required|string|max:255',
@@ -297,8 +313,6 @@ class EmployeeService
 
     public function uploadEmploymentDocument(Request $request, $employeeId, $employmentId)
     {
-        Log::info('Uploading document for employee ID: ' . $employeeId . ', employment ID: ' . $employmentId, $request->all());
-
         $request->validate([
             'file' => 'required|file|max:10240',
             'document_type' => 'required|string',
@@ -348,8 +362,6 @@ class EmployeeService
 
     public function deleteEmploymentDocument($docId)
     {
-        Log::info('Deleting employment document with ID: ' . $docId);
-
         $document = EmployeeDocument::findOrFail($docId);
 
         // Delete file from storage
@@ -372,8 +384,6 @@ class EmployeeService
             ->latest()
             ->get();
 
-        Log::info('Fetched schedules: ', $employees->toArray());
-
         return Inertia::render('Employees/Schedule', [
             'employees' => $employees
         ]);
@@ -381,8 +391,6 @@ class EmployeeService
 
     public function storeBatchSchedule(Request $request, Employee $employee)
     {
-        Log::info('storeBatchSchedule', $request->all());
-
         $validated = $request->validate([
             'start_date' => 'required|date',
             'end_date'   => 'required|date|after_or_equal:start_date',
@@ -513,7 +521,7 @@ class EmployeeService
     {
         $validated = $request->validate([
             'schedule_date' => 'required|date',
-            'shift'         => 'nullable|in:Morning,Night',
+            // 'shift'         => 'nullable|in:Morning,Night',
             'time_in'       => 'nullable|date_format:H:i,H:i:s',
             'time_out'      => 'nullable|date_format:H:i,H:i:s|after:time_in',
             'status'        => 'required|in:Scheduled,Absent,Leave,Day Off',
@@ -523,7 +531,7 @@ class EmployeeService
         if (in_array($validated['status'], ['Absent', 'Leave', 'Day Off'])) {
             $validated['time_in'] = null;
             $validated['time_out'] = null;
-            $validated['shift'] = null;
+            // $validated['shift'] = null;
         } else {
             if (empty($validated['time_in']) || empty($validated['time_out'])) {
                 return back()->withErrors([
@@ -534,7 +542,7 @@ class EmployeeService
 
         $schedule->update([
             'schedule_date' => $validated['schedule_date'],
-            'shift' => $validated['shift'],
+            // 'shift' => $validated['shift'],
             'time_in' => $validated['time_in'],
             'time_out' => $validated['time_out'],
             'status' => $validated['status'],
@@ -550,8 +558,6 @@ class EmployeeService
         $end   = $request->end_date ?? now()->endOfMonth()->toDateString();
 
         $employee->load('schedules');
-
-        Log::info($employee);
 
         return Inertia::render('Employees/EmployeeSchedule', [
             'employee' => $employee,
@@ -625,10 +631,52 @@ class EmployeeService
         return $mpdf->Output('All_Employees_Schedules.pdf', 'I');
     }
 
+    public function printPosAccounts(){
+
+        $userAccounts = User::orderBy('name')
+            ->where('role', '!=', User::ROLE_ADMIN)
+            ->get();
+
+        $type = 1; // pos accounts
+
+        $mpdf = new \Mpdf\Mpdf([
+            'format' => 'A4',
+            'margin_left' => 10,
+            'margin_right' => 10,
+            'margin_top' => 10,
+            'margin_bottom' => 10,
+        ]);
+
+        $html = view('employees.pdf_pos_accounts', compact('userAccounts', 'type'))->render();
+        $mpdf->WriteHTML($html);
+
+        return $mpdf->Output('POS_Accounts.pdf', 'I');
+    }
+
+    public function printEmployeePersonalDetails(){
+
+        $employeeDetails = Employee::orderBy('first_name')
+            ->where('access', '!=', User::ROLE_ADMIN)
+            ->get();
+
+        $type = 2; // employee personal details
+
+        $mpdf = new \Mpdf\Mpdf([
+            'format' => 'A4-L',
+            'margin_left' => 10,
+            'margin_right' => 10,
+            'margin_top' => 10,
+            'margin_bottom' => 10,
+        ]);
+
+        $html = view('employees.pdf_pos_accounts', compact('employeeDetails', 'type'))->render();
+        $mpdf->WriteHTML($html);
+
+        return $mpdf->Output('Employee_Personal_Details.pdf', 'I');
+    }
+
     public function showDTR(Employee $employee)
     {
-        \Log::info('Fetching DTR for employee ID: ' . $employee->id);
-
         $startOfMonth = Carbon::now()->startOfMonth();
         $endOfMonth   = Carbon::now()->endOfMonth();
 
@@ -652,12 +700,7 @@ class EmployeeService
 
     public function showDTR_orig(Employee $employee)
     {
-        Log::info('employee');
-        Log::info($employee);
-
         $schedules = $employee->schedules()->orderBy('schedule_date')->get();
-
-        Log::info($schedules);
 
         return response()->json([
             'employee' => $employee,

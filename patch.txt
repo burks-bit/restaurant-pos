@@ -1,24 +1,27 @@
-InventoryReportExport.php
+InventoryReportExport.php d
 
-InventoryReport.vue
-Items.vue
-Index.vue -> inventory
+InventoryReport.vue d
+Items.vue d 
+Index.vue -> inventory d
 
-useInventoryReport.js
-useInventoryItems.js
-useInventorySummary.js
+useInventoryReport.js d
+useInventoryItems.js d
+useInventorySummary.js d
 
-InventoryReport.blade.php
+InventoryReport.blade.php d
 
-ReportController.php
-InventoryController.php
+ReportController.php d
+InventoryController.php d
 
-InventoryItem.php
-InventoryMovement.php
+InventoryItem.php d
+InventoryMovement.php d
 
-InventoryService.php
-ReportService.php
+InventoryService.php d
+ReportService.php d
 
-web.php
+web.php dcd
 
 added adjustment_type in inventory_movements
+ALTER TABLE `inventory_movements`
+ADD COLUMN `adjustment_type` VARCHAR(50) DEFAULT NULL
+  AFTER `type`;

@@ -13,6 +13,8 @@ export function useEmployeeSchedule() {
   const showBatchModal = ref(false)
 
   const workingStatuses = ['Scheduled']
+  const isSavingBatch = ref(false)
+  const isSavingSchedule = ref(false)
 
   const form = ref({
     id: null,
@@ -69,6 +71,16 @@ export function useEmployeeSchedule() {
       if (!targetForm.time_out) targetForm.time_out = '17:00'
     }
   }
+
+  watch(
+    () => page.props.employee,
+    (newEmployee) => {
+      if (newEmployee) {
+        employee.value = newEmployee
+      }
+    },
+    { deep: true }
+  )
 
   watch(
     () => form.value.status,
@@ -245,7 +257,62 @@ export function useEmployeeSchedule() {
     resetBatchForm()
   }
 
+  // const saveSchedule = () => {
+  //   const employeeId = employee.value.id
+  //   const payload = { ...form.value }
+
+  //   if (!requiresTime(payload.status)) {
+  //     payload.time_in = null
+  //     payload.time_out = null
+  //   }
+
+  //   if (payload.id) {
+  //     router.put(
+  //       route(`${prefix.value}.employees.schedules.update`, {
+  //         schedule: payload.id,
+  //       }),
+  //       payload,
+  //       {
+  //         preserveScroll: true,
+  //         onSuccess: () => {
+  //           const index = employee.value.schedules.findIndex(
+  //             (schedule) => schedule.id === payload.id
+  //           )
+
+  //           if (index !== -1) {
+  //             employee.value.schedules[index] = {
+  //               ...employee.value.schedules[index],
+  //               ...payload,
+  //             }
+  //           }
+
+  //           closeModal()
+  //         },
+  //       }
+  //     )
+  //   } else {
+  //     router.post(
+  //       route(`${prefix.value}.employees.schedules.store`, {
+  //         employee: employeeId,
+  //       }),
+  //       payload,
+  //       {
+  //         preserveScroll: true,
+  //         onSuccess: (pageResponse) => {
+  //           if (pageResponse.props.employee?.schedules) {
+  //             employee.value.schedules = pageResponse.props.employee.schedules
+  //           }
+
+  //           closeModal()
+  //         },
+  //       }
+  //     )
+  //   }
+  // }
   const saveSchedule = () => {
+    if (isSavingSchedule.value) return
+    isSavingSchedule.value = true
+
     const employeeId = employee.value.id
     const payload = { ...form.value }
 
@@ -256,33 +323,23 @@ export function useEmployeeSchedule() {
 
     if (payload.id) {
       router.put(
-        route(`${prefix.value}.employees.schedules.update`, {
-          schedule: payload.id,
-        }),
+        route(`${prefix.value}.employees.schedules.update`, { schedule: payload.id }),
         payload,
         {
           preserveScroll: true,
           onSuccess: () => {
-            const index = employee.value.schedules.findIndex(
-              (schedule) => schedule.id === payload.id
-            )
-
+            const index = employee.value.schedules.findIndex(s => s.id === payload.id)
             if (index !== -1) {
-              employee.value.schedules[index] = {
-                ...employee.value.schedules[index],
-                ...payload,
-              }
+              employee.value.schedules[index] = { ...employee.value.schedules[index], ...payload }
             }
-
             closeModal()
           },
+          onFinish: () => { isSavingSchedule.value = false },
         }
       )
     } else {
       router.post(
-        route(`${prefix.value}.employees.schedules.store`, {
-          employee: employeeId,
-        }),
+        route(`${prefix.value}.employees.schedules.store`, { employee: employeeId }),
         payload,
         {
           preserveScroll: true,
@@ -290,15 +347,53 @@ export function useEmployeeSchedule() {
             if (pageResponse.props.employee?.schedules) {
               employee.value.schedules = pageResponse.props.employee.schedules
             }
-
             closeModal()
           },
+          onFinish: () => { isSavingSchedule.value = false },
         }
       )
     }
   }
 
+  // const saveBatchSchedule = () => {
+  //   const employeeId = employee.value.id
+  //   const payload = { ...batchForm.value }
+
+  //   if (!payload.start_date || !payload.end_date) {
+  //     alert('Please select start date and end date.')
+  //     return
+  //   }
+
+  //   if (payload.start_date > payload.end_date) {
+  //     alert('End date must not be earlier than start date.')
+  //     return
+  //   }
+
+  //   if (!requiresTime(payload.status)) {
+  //     payload.time_in = null
+  //     payload.time_out = null
+  //   }
+
+  //   router.post(
+  //     route(`${prefix.value}.employees.schedules.batchStore`, {
+  //       employee: employeeId,
+  //     }),
+  //     payload,
+  //     {
+  //       preserveScroll: true,
+  //       onSuccess: (pageResponse) => {
+  //         if (pageResponse.props.employee?.schedules) {
+  //           employee.value.schedules = pageResponse.props.employee.schedules
+  //         }
+
+  //         closeBatchModal()
+  //       },
+  //     }
+  //   )
+  // }
   const saveBatchSchedule = () => {
+    if (isSavingBatch.value) return
+
     const employeeId = employee.value.id
     const payload = { ...batchForm.value }
 
@@ -317,10 +412,10 @@ export function useEmployeeSchedule() {
       payload.time_out = null
     }
 
+    isSavingBatch.value = true
+
     router.post(
-      route(`${prefix.value}.employees.schedules.batchStore`, {
-        employee: employeeId,
-      }),
+      route(`${prefix.value}.employees.schedules.batchStore`, { employee: employeeId }),
       payload,
       {
         preserveScroll: true,
@@ -328,9 +423,9 @@ export function useEmployeeSchedule() {
           if (pageResponse.props.employee?.schedules) {
             employee.value.schedules = pageResponse.props.employee.schedules
           }
-
           closeBatchModal()
         },
+        onFinish: () => { isSavingBatch.value = false },
       }
     )
   }
@@ -412,5 +507,8 @@ export function useEmployeeSchedule() {
     prevMonth,
     nextMonth,
     goBackToEmployees,
+
+    isSavingSchedule,
+    isSavingBatch,
   }
 }

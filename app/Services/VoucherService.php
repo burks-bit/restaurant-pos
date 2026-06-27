@@ -22,8 +22,6 @@ class VoucherService
 
     public function store(Request $request)
     {
-        Log::info('dsadsa');
-        Log::info($request->all());
 
         $request->validate([
             'control_no' => 'required|unique:vouchers,control_no',

@@ -1,33 +1,146 @@
 <template>
   <form class="space-y-4" @submit.prevent="$emit('submit')">
 
-    <!-- Name -->
-    <div>
-      <label class="block text-sm font-medium text-gray-700 mb-1">Representative name</label>
-      <input
-        v-model="form.name"
-        type="text"
-        required
-        class="w-full border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600"
-      />
+    <div class="grid grid-cols-2 gap-x-8 gap-y-4">
+
+      <!-- LEFT COLUMN -->
+      <div class="space-y-4">
+        <!-- Shift -->
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">Shift</label>
+          <select
+            v-model="form.shift_id"
+            required
+            class="w-full border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600"
+          >
+            <option value="" disabled>Select shift...</option>
+            <option v-for="sh in shifts" :key="sh.id" :value="sh.id">
+              {{ sh.name }} ({{ formatTime(sh.start_time) }}–{{ formatTime(sh.end_time) }})
+            </option>
+          </select>
+        </div>
+
+        <!-- Name -->
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">Representative name</label>
+          <input
+            v-model="form.name"
+            type="text"
+            required
+            class="w-full border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600"
+          />
+        </div>
+
+        <!-- Contact -->
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">Contact number</label>
+          <input
+            v-model="form.contact_number"
+            type="text"
+            class="w-full border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600"
+          />
+        </div>
+
+        <!-- Pricing scheme -->
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">Pricing scheme</label>
+          <select
+            v-model="form.pricing_scheme_id"
+            required
+            class="w-full border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600"
+            @change="$emit('scheme-change', form.pricing_scheme_id)"
+          >
+            <option value="" disabled>Select scheme...</option>
+            <option v-for="s in pricingSchemes" :key="s.id" :value="s.id">{{ s.name }}</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- RIGHT COLUMN -->
+      <div class="space-y-4">
+        <!-- Reservation date & time -->
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">Reservation date &amp; time</label>
+          <input
+            v-model="form.reservation_datetime"
+            type="datetime-local"
+            required
+            class="w-full border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600"
+          />
+        </div>
+
+        <!-- Reservation fee -->
+        <div class="border rounded p-3 bg-gray-50">
+          <p class="text-sm font-medium text-gray-700 mb-3">Reservation fee</p>
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="block text-xs text-gray-600 mb-1">Amount</label>
+              <input
+                v-model="form.reservation_fee"
+                type="number"
+                min="0"
+                step="0.01"
+                class="w-full border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600"
+              />
+            </div>
+            <div>
+              <label class="block text-xs text-gray-600 mb-1">Payment method</label>
+              <select
+                v-model="form.fee_payment_method"
+                class="w-full border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600"
+              >
+                <option value="1">Cash</option>
+                <option value="2">GCash</option>
+                <option value="3">Maya</option>
+                <option value="4">GrabPay</option>
+                <option value="5">BDO</option>
+                <option value="6">BPI</option>
+                <option value="7">Metrobank</option>
+                <option value="8">UnionBank</option>
+                <option value="9">LandBank</option>
+                <option value="10">Credit Card</option>
+                <option value="11">Debit Card</option>
+                <option value="12">Others</option>
+              </select>
+            </div>
+            <div v-if="form.fee_payment_method !== 'cash'" class="col-span-2">
+              <label class="block text-xs text-gray-600 mb-1">Reference no.</label>
+              <input
+                v-model="form.fee_reference_no"
+                type="text"
+                class="w-full border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600"
+              />
+            </div>
+          </div>
+        </div>
+
+        <!-- Remarks -->
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">Remarks</label>
+          <textarea
+            v-model="form.remarks"
+            rows="2"
+            class="w-full border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600"
+          ></textarea>
+        </div>
+
+        <!-- Status -->
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">Status</label>
+          <select
+            v-model="form.status"
+            class="w-full border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600"
+          >
+            <option value="pending">Pending</option>
+            <option value="confirmed">Confirmed</option>
+            <option value="cancelled">Cancelled</option>
+          </select>
+        </div>
+      </div>
     </div>
 
-    <!-- Pricing scheme -->
-    <div>
-      <label class="block text-sm font-medium text-gray-700 mb-1">Pricing scheme</label>
-      <select
-        v-model="form.pricing_scheme_id"
-        required
-        class="w-full border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600"
-        @change="$emit('scheme-change', form.pricing_scheme_id)"
-      >
-        <option value="" disabled>Select scheme...</option>
-        <option v-for="s in pricingSchemes" :key="s.id" :value="s.id">{{ s.name }}</option>
-      </select>
-    </div>
-
-    <!-- Pax breakdown -->
-    <div v-if="form.pax_breakdown.length">
+    <!-- Pax breakdown: full width, only when a pricing scheme is selected -->
+    <div v-if="form.pricing_scheme_id && form.pax_breakdown.length">
       <label class="block text-sm font-medium text-gray-700 mb-2">Pax per category</label>
       <div class="border rounded overflow-hidden">
         <table class="w-full text-sm">
@@ -66,96 +179,9 @@
         </table>
       </div>
     </div>
-    <p v-else class="text-sm text-gray-400 italic">Select a pricing scheme to configure pax.</p>
-
-    <!-- Date & time -->
-    <div>
-      <label class="block text-sm font-medium text-gray-700 mb-1">Reservation date &amp; time</label>
-      <input
-        v-model="form.reservation_datetime"
-        type="datetime-local"
-        required
-        class="w-full border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600"
-      />
-    </div>
-
-    <!-- Contact -->
-    <div>
-      <label class="block text-sm font-medium text-gray-700 mb-1">Contact number</label>
-      <input
-        v-model="form.contact_number"
-        type="text"
-        class="w-full border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600"
-      />
-    </div>
-
-    <!-- Reservation fee -->
-    <div class="border rounded p-3 bg-gray-50 space-y-3">
-      <p class="text-sm font-medium text-gray-700">Reservation fee</p>
-      <div class="grid grid-cols-2 gap-3">
-        <div>
-          <label class="block text-xs text-gray-600 mb-1">Amount</label>
-          <input
-            v-model="form.reservation_fee"
-            type="number"
-            min="0"
-            step="0.01"
-            class="w-full border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600"
-          />
-        </div>
-        <div>
-          <label class="block text-xs text-gray-600 mb-1">Payment method</label>
-          <select
-            v-model="form.fee_payment_method"
-            class="w-full border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600"
-          >
-            <option value="1">Cash</option>
-            <option value="2">GCash</option>
-            <option value="3">Maya</option>
-            <option value="4">GrabPay</option>
-            <option value="5">BDO</option>
-            <option value="6">BPI</option>
-            <option value="7">Metrobank</option>
-            <option value="8">UnionBank</option>
-            <option value="9">LandBank</option>
-            <option value="10">Credit Card</option>
-            <option value="11">Debit Card</option>
-            <option value="12">Others</option>
-          </select>
-        </div>
-      </div>
-      <div v-if="form.fee_payment_method !== 'cash'">
-        <label class="block text-xs text-gray-600 mb-1">Reference no.</label>
-        <input
-          v-model="form.fee_reference_no"
-          type="text"
-          class="w-full border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600"
-        />
-      </div>
-    </div>
-
-    <!-- Remarks -->
-    <div>
-      <label class="block text-sm font-medium text-gray-700 mb-1">Remarks</label>
-      <textarea
-        v-model="form.remarks"
-        rows="2"
-        class="w-full border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600"
-      ></textarea>
-    </div>
-
-    <!-- Status -->
-    <div>
-      <label class="block text-sm font-medium text-gray-700 mb-1">Status</label>
-      <select
-        v-model="form.status"
-        class="w-full border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600"
-      >
-        <option value="pending">Pending</option>
-        <option value="confirmed">Confirmed</option>
-        <option value="cancelled">Cancelled</option>
-      </select>
-    </div>
+    <p v-else-if="!form.pricing_scheme_id" class="text-sm text-gray-400 italic">
+      Select a pricing scheme to configure pax.
+    </p>
 
     <div class="flex justify-end gap-2 pt-2">
       <button
@@ -183,10 +209,18 @@ const props = defineProps({
   form: { type: Object, required: true },
   pricingSchemes: { type: Array, default: () => [] },
   pricingRules: { type: Array, default: () => [] },
+  shifts: { type: Array, default: () => [] },
   processing: { type: Boolean, default: false },
 })
 
-// console.log(props.pricingRules)
+const formatTime = (t) => {
+  if (!t) return ''
+  const [h, m] = t.split(':')
+  const hour = parseInt(h)
+  const ampm = hour >= 12 ? 'PM' : 'AM'
+  const hour12 = hour % 12 === 0 ? 12 : hour % 12
+  return `${hour12}:${m} ${ampm}`
+}
 
 defineEmits(['submit', 'cancel', 'qty-change', 'scheme-change'])
 

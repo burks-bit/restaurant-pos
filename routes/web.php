@@ -111,6 +111,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
     };
 
     $employeeRoutes = function ($employeeIndexMethod = 'index') {
+        
+        Route::get('/employee-logs', [DTRController::class, 'getAllEmployeeDailyLogs'])->name('employees.daily-logs');
+
         Route::get('/employees', [EmployeeController::class, $employeeIndexMethod])->name('employees.index');
         Route::post('/employees/store', [EmployeeController::class, 'store'])->name('employees.store');
         Route::put('/employees/edit/{id}', [EmployeeController::class, 'update'])->name('employees.edit');
@@ -122,6 +125,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/employees/{employee}/schedule', [EmployeeController::class, 'getEmployeeSchedules'])->name('employees.schedule');
         Route::get('/employees/{employee}/schedules/print', [EmployeeController::class, 'printSchedule'])->name('employees.schedules.print');
         Route::get('/employees/schedules/print-all', [EmployeeController::class, 'printAllSchedules'])->name('employees.schedules.printAll');
+        Route::get('/print-pos-accounts', [EmployeeController::class, 'printPosAccounts'])->name('print-pos-accounts');
+        Route::get('/print-employee-personal-details', [EmployeeController::class, 'printEmployeePersonalDetails'])->name('print-employee-personal-details');
 
         Route::put('/employees/{employee}/employment/{employment}/update', [EmployeeController::class, 'updateEmployment'])->name('employment.update');
         Route::post('/employees/{employee}/employment/{employment}/documents/upload', [EmployeeController::class, 'uploadEmploymentDocument'])->name('employment.documents.upload');

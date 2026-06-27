@@ -183,6 +183,26 @@ class EmployeeController extends Controller
         }
     }
 
+    public function printPosAccounts(Request $request)
+    {
+        try {
+            return $this->employeeService->printPosAccounts($request);
+        } catch (\Throwable $e) {
+            Log::error('EmployeeController@printPosAccounts failed: ' . $e->getMessage());
+            return back()->with('error', 'Failed to print POS accounts.');
+        }
+    }
+
+    public function printEmployeePersonalDetails(Request $request)
+    {
+        try {
+            return $this->employeeService->printEmployeePersonalDetails($request);
+        } catch (\Throwable $e) {
+            Log::error('EmployeeController@printEmployeePersonalDetails failed: ' . $e->getMessage());
+            return back()->with('error', 'Failed to print employee personal details.');
+        }
+    }
+
     public function showDTR(Employee $employee)
     {
         try {

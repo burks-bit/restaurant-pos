@@ -10,6 +10,7 @@ use App\Models\EmployeeOvertime;
 use App\Models\Branch;
 use Inertia\Inertia;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\DB;
 
 class DTRService
 {
@@ -25,21 +26,6 @@ class DTRService
         Log::info('clockin');
         Log::info($request->all());
 
-        $photoPath = null;
-
-        // ✅ ALWAYS SAVE IMAGE FIRST
-        if ($request->hasFile('photo')) {
-            try {
-                $photoPath = $request->file('photo')->store('attendance_photo_images', 'public');
-
-                Log::info('Photo saved at: ' . $photoPath);
-            } catch (\Exception $e) {
-                Log::error('Photo save failed: ' . $e->getMessage());
-            }
-        } else {
-            Log::warning('No photo received');
-        }
-
         $employee = auth()->user()->employee;
         $today = Carbon::now()->toDateString();
 
@@ -50,160 +36,149 @@ class DTRService
         // ❌ NO SCHEDULE
         if (!$schedule) {
             return response()->json([
-                'message' => 'No schedule found for today.',
-                'photo_path' => $photoPath // 👈 return for testing
+                'message' => "No schedule found for today ({$today}). Please contact your supervisor or HR to confirm your shift.",
             ], 404);
         }
 
         // ❌ ALREADY CLOCKED IN
         if ($schedule->actual_time_in) {
             return response()->json([
-                'message' => 'Already clocked in.',
-                'photo_path' => $photoPath // 👈 return for testing
+                'message' => "You already clocked in today at " .
+                    Carbon::parse($schedule->actual_time_in)->format('h:i A') . ".",
             ], 422);
+        }
+
+        // ❌ NO PHOTO RECEIVED — fail clearly instead of silently proceeding
+        if (!$request->hasFile('photo')) {
+            Log::warning('No photo received for clock-in', ['employee_id' => $employee->id]);
+
+            return response()->json([
+                'message' => 'No photo was captured. Please allow camera access in your browser and try again.',
+            ], 422);
+        }
+
+        // ✅ SAVE PHOTO
+        try {
+            $photoPath = $request->file('photo')->store('attendance_photo_images', 'public');
+            Log::info('Photo saved at: ' . $photoPath);
+        } catch (\Exception $e) {
+            Log::error('Photo save failed: ' . $e->getMessage());
+
+            return response()->json([
+                'message' => 'Failed to save your photo. Please check your connection and try again.',
+            ], 500);
         }
 
         // ✅ NORMAL CLOCK IN
         $schedule->update([
             'actual_time_in' => now()->format('H:i:s'),
-            'time_in_photo' => $photoPath // 👈 save actual photo
+            'time_in_photo' => $photoPath,
         ]);
 
+        $shiftStart = $schedule->time_in
+            ? Carbon::parse($schedule->time_in)->format('h:i A')
+            : null;
+
+        $isLate = $shiftStart && now()->format('H:i:s') > $schedule->time_in;
+
         return response()->json([
-            'message' => 'Clocked in successfully.',
+            'message' => $isLate
+                ? "Clocked in at " . now()->format('h:i A') . ". You were scheduled for {$shiftStart} — this clock-in is late."
+                : "Clocked in successfully at " . now()->format('h:i A') . ".",
+            'is_late' => $isLate,
             'schedule' => $schedule,
-            'photo_path' => $photoPath
+            'photo_path' => $photoPath,
         ]);
     }
 
     public function clockOut(Request $request)
     {
-        \Log::info('clockout');
-        \Log::info($request->all());
-
-        $photoPath = null;
-
-        // ✅ ALWAYS SAVE IMAGE FIRST (for testing)
-        if ($request->hasFile('photo')) {
-            try {
-                $photoPath = $request->file('photo')->store('attendance_photo_images', 'public');
-                \Log::info('Clockout photo saved at: ' . $photoPath);
-            } catch (\Exception $e) {
-                \Log::error('Clockout photo save failed: ' . $e->getMessage());
-            }
-        } else {
-            \Log::warning('No clockout photo received');
-        }
+        Log::info('clockout');
+        Log::info($request->all());
 
         $employee = auth()->user()->employee;
-        $today = \Carbon\Carbon::now()->toDateString();
+        $today = Carbon::now()->toDateString();
 
+        // ✅ Find the employee's open shift — could be today's schedule,
+        // or an overnight shift that started yesterday and ends today.
         $schedule = EmployeeSchedule::where('employee_id', $employee->id)
-            ->whereDate('schedule_date', $today)
+            ->whereNotNull('actual_time_in')
+            ->whereNull('actual_time_out')
+            ->where(function ($query) use ($today) {
+                $query->whereDate('schedule_date', $today)
+                    ->orWhereDate('shift_end_date', $today);
+            })
+            ->orderByDesc('schedule_date')
             ->first();
 
-        // ❌ NO SCHEDULE
+        // ❌ NO OPEN SHIFT FOUND
         if (!$schedule) {
-            return response()->json([
-                'message' => 'No schedule found for today.',
-                'photo_path' => $photoPath
-            ], 404);
+            // Distinguish "no schedule at all today" vs "not clocked in yet"
+            $todaySchedule = EmployeeSchedule::where('employee_id', $employee->id)
+                ->whereDate('schedule_date', $today)
+                ->first();
+
+            if (!$todaySchedule) {
+                return response()->json([
+                    'message' => "No schedule found for today ({$today}). Please contact your supervisor or HR.",
+                ], 404);
+            }
+
+            if (!$todaySchedule->actual_time_in) {
+                return response()->json([
+                    'message' => 'You must clock in first before you can clock out.',
+                ], 422);
+            }
+
+            if ($todaySchedule->actual_time_out) {
+                return response()->json([
+                    'message' => "You already clocked out today at " .
+                        Carbon::parse($todaySchedule->actual_time_out)->format('h:i A') . ".",
+                ], 422);
+            }
         }
 
-        // ❌ NOT YET CLOCKED IN
-        if (!$schedule->actual_time_in) {
-            return response()->json([
-                'message' => 'You must clock in first.',
-                'photo_path' => $photoPath
-            ], 422);
-        }
-
-        // ❌ ALREADY CLOCKED OUT
+        // ❌ ALREADY CLOCKED OUT (defensive, shouldn't hit due to whereNull above)
         if ($schedule->actual_time_out) {
             return response()->json([
-                'message' => 'Already clocked out.',
-                'photo_path' => $photoPath
+                'message' => "You already clocked out today at " .
+                    Carbon::parse($schedule->actual_time_out)->format('h:i A') . ".",
             ], 422);
+        }
+
+        // ❌ NO PHOTO RECEIVED
+        if (!$request->hasFile('photo')) {
+            Log::warning('No photo received for clock-out', ['employee_id' => $employee->id]);
+
+            return response()->json([
+                'message' => 'No photo was captured. Please allow camera access in your browser and try again.',
+            ], 422);
+        }
+
+        // ✅ SAVE PHOTO
+        try {
+            $photoPath = $request->file('photo')->store('attendance_photo_images', 'public');
+            Log::info('Clockout photo saved at: ' . $photoPath);
+        } catch (\Exception $e) {
+            Log::error('Clockout photo save failed: ' . $e->getMessage());
+
+            return response()->json([
+                'message' => 'Failed to save your photo. Please check your connection and try again.',
+            ], 500);
         }
 
         // ✅ SUCCESS
         $schedule->update([
             'actual_time_out' => now()->format('H:i:s'),
-            'time_out_photo' => $photoPath // 👈 add this column
+            'time_out_photo' => $photoPath,
         ]);
 
         return response()->json([
-            'message' => 'Clocked out successfully.',
+            'message' => "Clocked out successfully at " . now()->format('h:i A') . ".",
             'schedule' => $schedule,
-            'photo_path' => $photoPath
+            'photo_path' => $photoPath,
         ]);
     }
-
-    // public function clockIn-orig-04162026(Request $request)
-    // {
-    //     Log::info('clockin');
-    //     Log::info($request->all());
-    //     $employee = auth()->user()->employee;
-
-    //     $today = Carbon::now()->toDateString();
-
-    //     $schedule = EmployeeSchedule::where('employee_id', $employee->id)
-    //         ->whereDate('schedule_date', $today)
-    //         ->first();
-
-    //     if (!$schedule) {
-    //         return response()->json([
-    //             'message' => 'No schedule found for today.'
-    //         ], 404);
-    //     }
-
-    //     if ($schedule->actual_time_in) {
-    //         return response()->json([
-    //             'message' => 'Already clocked in.'
-    //         ], 422);
-    //     }
-
-    //     $schedule->update([
-    //         'actual_time_in' => now()->format('H:i:s')
-    //     ]);
-
-    //     return response()->json([
-    //         'message' => 'Clocked in successfully.',
-    //         'schedule' => $schedule
-    //     ]);
-    // }
-
-    // public function clockOut_orig(Request $request)
-    // {
-    //     $employee = auth()->user()->employee;
-
-    //     $today = Carbon::now()->toDateString();
-
-    //     $schedule = EmployeeSchedule::where('employee_id', $employee->id)
-    //         ->whereDate('schedule_date', $today)
-    //         ->first();
-
-    //     if (!$schedule) {
-    //         return response()->json([
-    //             'message' => 'No schedule found for today.'
-    //         ], 404);
-    //     }
-
-    //     if ($schedule->actual_time_out) {
-    //         return response()->json([
-    //             'message' => 'Already clocked out.'
-    //         ], 422);
-    //     }
-
-    //     $schedule->update([
-    //         'actual_time_out' => now()->format('H:i:s')
-    //     ]);
-
-    //     return response()->json([
-    //         'message' => 'Clocked out successfully.',
-    //         'schedule' => $schedule
-    //     ]);
-    // }
 
     public function getAllEmployeeOvertime()
     {
@@ -211,6 +186,25 @@ class DTRService
 
         return Inertia::render('Employees/EmployeesOvertime', [
             'employees' => $employees
+        ]);
+    }
+
+    public function getAllEmployeeDailyLogs()
+    {
+        $today = Carbon::now()->toDateString();
+
+        $logs = DB::table('employees as emp')
+            ->leftJoin('employee_schedules as emps', 'emps.employee_id', '=', 'emp.id')
+            ->whereDate('emps.schedule_date', $today)
+            ->where(function ($query) {
+                $query->where('emps.status', '!=', 'Day Off')
+                    ->where('emps.status', '!=', 'Absent')
+                    ->where('emps.status', '!=', 'Leave');
+            })
+            ->get();
+
+        return Inertia::render('Employees/Logs', [
+            'logs' => $logs
         ]);
     }
 
@@ -284,117 +278,6 @@ class DTRService
         return response()->json(['message' => 'Overtime status updated successfully.']);
     }
 
-    // public function summary(Request $request)
-    // {
-    //     Log::info('Generating payroll summary with filters:');
-    //     Log::info($request->all());
-        
-    //     $request->validate([
-    //         'start_date' => 'required|date',
-    //         'end_date'   => 'required|date|after_or_equal:start_date',
-    //     ]);
-
-    //     $start = Carbon::parse($request->start_date)->startOfDay();
-    //     $end = Carbon::parse($request->end_date)->endOfDay();
-
-    //     $employees = Employee::with([
-    //         'overtimes' => function ($q) use ($start, $end) {
-    //             $q->where('status', 'approved')
-    //                 ->whereBetween('created_at', [$start, $end]);
-    //         },
-    //         'employmentDetails',
-    //         'schedules' => function ($q) use ($start, $end) {
-    //             $q->whereBetween('schedule_date', [$start, $end]);
-    //         }
-    //     ])
-    //     ->when(
-    //         $request->branch_id !== 'all' && $request->branch_id !== null,
-    //         function ($q) use ($request) {
-
-    //             $q->whereHas('employmentDetails', function ($q2) use ($request) {
-    //                 $q2->where('branch_id', $request->branch_id);
-    //             });
-
-    //         }
-    //     )
-    //     ->get();
-
-    //     $payrollData = [];
-
-    //     foreach ($employees as $emp) {
-    //         $totalDays = 0;
-    //         $totalHours = 0;
-    //         $totalLate = 0;
-    //         $totalUndertime = 0;
-    //         $totalEarnings = 0;
-    //         $overtimeHours = 0;
-
-    //         $employmentDetail = $emp->employmentDetails->first();
-    //         $dailyRate = optional($emp->employmentDetails->first())->daily_rate ?? 0;
-    //         $overtimeRate = optional($employmentDetail)->overtime_rate ?? 1.25;
-    //         $hourlyRate = $dailyRate > 0 ? $dailyRate / 8 : 0;
-
-    //         $overtimeHours = $emp->overtimes->sum(function ($ot) {
-    //             return (float) $ot->total_hours;
-    //         });
-
-    //         foreach ($emp->schedules as $schedule) {
-    //             if ($schedule->status === 'Absent') continue;
-    //             if (!$schedule->actual_time_in || !$schedule->actual_time_out) continue;
-
-    //             $timeIn = Carbon::parse($schedule->actual_time_in);
-    //             $timeOut = Carbon::parse($schedule->actual_time_out);
-    //             $shiftStart = Carbon::parse($schedule->time_in);
-    //             $shiftEnd = Carbon::parse($schedule->time_out);
-
-    //             $workedHours = max(0, $timeIn->floatDiffInHours($timeOut));
-
-    //             $totalHours += $workedHours;
-    //             $totalDays++;
-
-    //             if ($timeIn->gt($shiftStart)) {
-    //                 $totalLate += $shiftStart->diffInMinutes($timeIn);
-    //             }
-
-    //             if ($timeOut->lt($shiftEnd)) {
-    //                 $totalUndertime += $timeOut->diffInMinutes($shiftEnd);
-    //             }
-
-    //             $multiplier = 1;
-    //             if ($schedule->holiday_type === 'Regular') {
-    //                 $multiplier = 2;
-    //             } elseif ($schedule->holiday_type === 'Special') {
-    //                 $multiplier = 1.3;
-    //             }
-
-    //             if ($schedule->is_rest_day) {
-    //                 $multiplier *= 1.3;
-    //             }
-
-    //             $dayEarnings = min($workedHours, 8) * $hourlyRate * $multiplier;
-
-    //             $totalEarnings += $dayEarnings;
-    //         }
-
-    //         $overtimePay = $overtimeHours * $overtimeRate;
-    //         $totalEarnings += $overtimePay;
-
-    //         $payrollData[] = [
-    //             'id' => $emp->id,
-    //             'employee_code' => $emp->employee_code,
-    //             'first_name' => $emp->first_name,
-    //             'last_name' => $emp->last_name,
-    //             'total_days' => $totalDays,
-    //             'total_hours' => round($totalHours, 2),
-    //             'total_late' => $totalLate,
-    //             'total_undertime' => $totalUndertime,
-    //             'overtime_hours' => round($overtimeHours, 2),
-    //             'total_earnings' => round($totalEarnings, 2),
-    //         ];
-    //     }
-
-    //     return response()->json($payrollData);
-    // }
     public function summary(Request $request)
     {
         Log::info('Generating payroll summary with filters:');

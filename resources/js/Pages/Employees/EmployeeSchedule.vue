@@ -284,8 +284,8 @@
       <button @click="closeModal" class="px-4 py-2 bg-gray-200 rounded">
         Cancel
       </button>
-      <button @click="saveSchedule" class="px-4 py-2 bg-blue-600 text-white rounded">
-        Save
+      <button @click="saveSchedule" :disabled="isSavingSchedule" class="px-4 py-2 bg-blue-600 text-white rounded">
+        {{ isSavingSchedule ? 'Saving...' : 'Save' }}
       </button>
     </div>
   </div>
@@ -367,8 +367,15 @@
             <button @click="closeBatchModal" class="px-4 py-2 bg-gray-200 rounded">
               Cancel
             </button>
-            <button @click="saveBatchSchedule" class="px-4 py-2 bg-green-600 text-white rounded">
+            <!-- <button @click="saveBatchSchedule" class="px-4 py-2 bg-green-600 text-white rounded">
               Post Schedule
+            </button> -->
+            <button
+              @click="saveBatchSchedule"
+              :disabled="isSavingBatch"
+              class="px-4 py-2 bg-green-600 text-white rounded disabled:opacity-50"
+            >
+              {{ isSavingBatch ? 'Posting...' : 'Post Schedule' }}
             </button>
           </div>
         </div>
@@ -418,5 +425,8 @@ const {
   prevMonth,
   nextMonth,
   goBackToEmployees,
+
+  isSavingSchedule,
+  isSavingBatch,
 } = useEmployeeSchedule()
 </script>

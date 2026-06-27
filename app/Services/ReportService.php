@@ -46,13 +46,6 @@ class ReportService
                 ->get();
         }
 
-        Log::info('ReportController@index - Orders fetched', [
-            'type' => $type,
-            'start' => $start->toDateTimeString(),
-            'end' => $end->toDateTimeString(),
-            'orders_count' => $orders->count(),
-        ]);
-
         $grandTotal = $orders->sum('total');
 
         return Inertia::render('Reports/SalesReport', [
@@ -129,8 +122,6 @@ class ReportService
 
     public function fetchInventoryReport(Request $request)
     {
-        \Log::info('Inventory General Report (JSON)');
-        \Log::info($request->all());
 
         $reportType = $request->query('type', 'all');
         $startDate  = $request->query('start_date');
@@ -220,9 +211,6 @@ class ReportService
                 'remarks'          => $item->remarks ?? '',                                 // ✅
             ]);
         }
-
-        Log::info('fetched report');
-        Log::info($reportData);
 
         return response()->json([
             'success' => true,
@@ -368,10 +356,6 @@ class ReportService
 
         $totalExpenses = $expenses->sum('amount');
 
-        Log::info('totalExpenses');
-        Log::info($totalExpenses);
-        Log::info($expenses);
-
         return response()->json([
             'data' => $expenses,
             'total' => $totalExpenses
@@ -380,9 +364,6 @@ class ReportService
 
     public function printInventoryReport(Request $request)
     {
-        \Log::info('Inventory General Report (PDF)');
-        \Log::info($request->all());
-
         $reportType = $request->query('type', 'all');
         $startDate  = $request->query('start_date');
         $endDate    = $request->query('end_date');
@@ -455,8 +436,6 @@ class ReportService
                 'creator_name' => $itemMovements->first()?->creator?->name ?? '-',
             ]);
         }
-
-        \Log::info('Prepared report data', ['count' => $reportData->count()]);
 
         $mpdf = new \Mpdf\Mpdf([
             'format' => 'A4',
@@ -540,11 +519,8 @@ class ReportService
     public function salesReportIndex()
     {
         $today = now()->toDateString();
-        Log::info($today);
         
         $cashiers = User::where('role', 2)->get();
-        Log::info('cashiers: ' . $cashiers->count());
-        Log::info($cashiers);
         $shifts = \App\Models\Shift::all();
 
         $orders = Order::with([
@@ -558,7 +534,6 @@ class ReportService
             ->orderBy('created_at', 'desc')
             ->get();
         
-        Log::info('orders: ' . $orders);
         $consumedAddons = [];
         foreach ($orders as $order) {
             $order->total_addons = $order->addons->sum('subtotal');
@@ -646,14 +621,6 @@ class ReportService
             ->get();
 
         $payments = $allPayments->pluck('total', 'payment_method_name')->toArray();
-        Log::info('payments', $payments);
-
-        
-        // $totalGcashSales += $totalReservationFee;
-        Log::info('Reservation Fee: ---'. $totalReservationFee);
-
-        Log::info('totalCashSales: ' . $totalCashSales);
-        Log::info('totalGcashSales: ' . $totalGcashSales);
 
         return Inertia::render('Reports/SalesReport', [
             'shifts' => $shifts,
@@ -672,721 +639,324 @@ class ReportService
         ]);
     }
 
-    public function fetchSalesReport(Request $request)
-    {
-        Log::info($request->only([
-            'start_date',
-            'end_date',
-            'status',
-            'cashier_id',
-            'shift_id',
-        ]));
+    // ════════════════════════════════════════════════════════════════════════════
+    // SHARED HELPER — called by both fetchSalesReport and exportSalesReportExcel
+    // ════════════════════════════════════════════════════════════════════════════
 
-        $cashier_expenses = Expense::when($request->shift_id !== null && $request->shift_id !== 'All', function ($query) use ($request) {
-                $query->where('shift_id', $request->shift_id);
-            })
-            ->when(!is_null($request->cashier_id) && $request->cashier_id !== '', function ($query) use ($request) {
-                $query->where('created_by', $request->cashier_id);
-            })
-            ->when($request->start_date && $request->end_date, function ($query) use ($request) {
-                $query->whereBetween('expense_date', [
-                    $request->start_date . ' 00:00:00',
-                    $request->end_date . ' 23:59:59',
-                ]);
-            })
-            ->sum('amount');
-        
-        $allPayments = DB::table('orders as ord')
-            ->join('order_payments as ordp', 'ordp.order_id', '=', 'ord.id')
-            ->join('payment_methods as pm', 'pm.id', '=', 'ordp.payment_method_id')
-            ->where('ordp.is_void', 0)
-            ->where('ord.status', 'paid')
-            ->when($request->start_date && $request->end_date, function ($query) use ($request) {
-                $query->whereBetween('ord.created_at', [
-                    $request->start_date . ' 00:00:00',
-                    $request->end_date . ' 23:59:59',
-                ]);
-            })
-            ->when(!is_null($request->cashier_id) && $request->cashier_id !== '', function ($query) use ($request) {
-                $query->where('ord.user_id', $request->cashier_id);
-            })
+    /**
+     * Resolve the unified list of user IDs to scope queries against.
+     * Always includes all frontdoor (role=3) users.
+     * If a cashier filter is active, that cashier is merged in too.
+     */
+    private function resolveTargetUserIds(?string $cashierId): array
+    {
+        $frontdoorIds = User::where('role', 3)->pluck('id')->toArray();
+
+        return collect($frontdoorIds)
             ->when(
-                $request->filled('shift_id') && $request->shift_id !== 'All',
-                function ($query) use ($request) {
-                    $query->where('ord.shift_id', $request->shift_id);
-                }
+                !is_null($cashierId) && $cashierId !== '',
+                fn($c) => $c->push((int) $cashierId)
             )
+            ->unique()
+            ->values()
+            ->toArray();
+    }
+
+    /**
+     * Build the aggregated payments breakdown (dine-in + RSVP fees merged).
+     * Returns: [ 'Cash' => 1500.00, 'GCash' => 3000.00, 'Reservation Fee' => 4000.00, ... ]
+     */
+    private function buildPaymentsBreakdown(
+        ?string $startDate,
+        ?string $endDate,
+        ?string $shiftId,
+        bool    $hasCashierFilter,
+        array   $targetUserIds
+    ): array {
+        $baseQuery = function () use ($startDate, $endDate, $shiftId) {
+            return DB::table('orders as ord')
+                ->join('order_payments as ordp', 'ordp.order_id', '=', 'ord.id')
+                ->join('payment_methods as pm', 'pm.id', '=', 'ordp.payment_method_id')
+                ->where('ordp.is_void', 0)
+                ->where('ord.status', 'paid')
+                ->when($startDate && $endDate, fn($q) => $q->whereBetween('ord.created_at', [
+                    $startDate . ' 00:00:00',
+                    $endDate   . ' 23:59:59',
+                ]))
+                ->when(
+                    !is_null($shiftId) && $shiftId !== 'All',
+                    fn($q) => $q->where('ord.shift_id', $shiftId)
+                );
+        };
+
+        // Dine-in: orders with a table, excluding rows where reservation fee was applied at checkout
+        $dineIn = $baseQuery()
+            ->whereNotNull('ord.table_number')
+            ->whereNotIn('ord.id', fn($q) =>
+                $q->select('order_id')
+                ->from('order_payments')
+                ->where('remarks', 'Reservation fee applied')
+            )
+            ->when($hasCashierFilter, fn($q) => $q->whereIn('ord.user_id', $targetUserIds))
             ->select('pm.name as payment_method_name', DB::raw('SUM(ordp.amount) as total'))
             ->groupBy('pm.id', 'pm.name')
             ->get();
 
-        // Result: [ 'gcash' => 500, 'maya' => 6000, 'cash' => 900 ]
-        $payments = $allPayments->pluck('total', 'payment_method_name')->toArray();
-        Log::info('payments');
-        Log::info($payments);
-        
-        $allFrontdoorIds = User::where('role', 3)->pluck('id')->toArray();
-        $targetUserIds = collect($allFrontdoorIds);
-        $totalReservationFee = DB::table('orders as ord')
-            ->join('order_payments as ordp', 'ordp.order_id', '=', 'ord.id')
-            ->join('payment_methods as pm', 'pm.id', '=', 'ordp.payment_method_id')
-            ->leftJoin('reservations as res', 'res.id', '=', 'ord.reservation_id') // ← also remove this if res.* isn't used anywhere else in the query
-            ->where('pm.id', 13)
-            ->where('ordp.is_void', 0)
-            ->where('ord.status', 'paid')
+        // RSVP: reservation fee collection orders (no table yet, tied to a reservation)
+        $rsvp = $baseQuery()
+            ->whereNotNull('ord.reservation_id')
+            ->whereNull('ord.table_number')
             ->whereNull('ordp.remarks')
-            ->when($request->start_date && $request->end_date, function ($query) use ($request) {
-                $query->whereBetween('ord.created_at', [
-                    $request->start_date . ' 00:00:00',
-                    $request->end_date . ' 23:59:59',
-                ]);
-            })
-            ->when(!empty($allFrontdoorIds), function ($query) use ($allFrontdoorIds) {
-                $query->whereIn('ord.user_id', $allFrontdoorIds);
-            })
-            ->when(!is_null($request->shift_id) && $request->shift_id !== 'All', function ($query) use ($request) {
-                $query->where('ord.shift_id', $request->shift_id);
-            })
-            ->sum('ordp.amount');
-        
-        $totalCashSales = DB::table('orders as ord')
-            ->join('order_payments as ordp', 'ordp.order_id', '=', 'ord.id')
-            ->join('payment_methods as pm', 'pm.id', '=', 'ordp.payment_method_id')
-            ->where('pm.id', 1) // Cash
-            ->where('ordp.is_void', 0)
-            ->where('ord.status', 'paid')
-            ->when($request->start_date && $request->end_date, function ($query) use ($request) {
-                $query->whereBetween('ord.created_at', [
-                    $request->start_date . ' 00:00:00',
-                    $request->end_date . ' 23:59:59',
-                ]);
-            })
-            ->when(!is_null($request->cashier_id) && $request->cashier_id !== '', function ($query) use ($request) {
-                $query->where('ord.user_id', $request->cashier_id);
-            })
-            ->when(
-            $request->filled('shift_id') && $request->shift_id !== 'All',
-                function ($query) use ($request) {
-                    $query->where('ord.shift_id', $request->shift_id);
-                }
-            )
-            ->sum('ordp.amount');
-
-        $totalGcashSales = DB::table('orders as ord')
-            ->join('order_payments as ordp', 'ordp.order_id', '=', 'ord.id')
-            ->join('payment_methods as pm', 'pm.id', '=', 'ordp.payment_method_id')
-            ->where('pm.id', 2) // GCash
-            ->where('ordp.is_void', 0)
-            ->where('ord.status', 'paid')
-            ->when($request->start_date && $request->end_date, function ($query) use ($request) {
-                $query->whereBetween('ord.created_at', [
-                    $request->start_date . ' 00:00:00',
-                    $request->end_date . ' 23:59:59',
-                ]);
-            })
-            ->when(!is_null($request->cashier_id) && $request->cashier_id !== '', function ($query) use ($request) {
-                $query->where('ord.user_id', $request->cashier_id);
-            })
-            ->when(
-            $request->filled('shift_id') && $request->shift_id !== 'All',
-                function ($query) use ($request) {
-                    $query->where('ord.shift_id', $request->shift_id);
-                }
-            )
-            ->sum('ordp.amount');
-
-        $totalMayaSales = DB::table('orders as ord')
-            ->join('order_payments as ordp', 'ordp.order_id', '=', 'ord.id')
-            ->join('payment_methods as pm', 'pm.id', '=', 'ordp.payment_method_id')
-            ->where('pm.id', 3) // GCash
-            ->where('ordp.is_void', 0)
-            ->where('ord.status', 'paid')
-            ->when($request->start_date && $request->end_date, function ($query) use ($request) {
-                $query->whereBetween('ord.created_at', [
-                    $request->start_date . ' 00:00:00',
-                    $request->end_date . ' 23:59:59',
-                ]);
-            })
-            ->when(!is_null($request->cashier_id) && $request->cashier_id !== '', function ($query) use ($request) {
-                $query->where('ord.user_id', $request->cashier_id);
-            })
-            ->when(
-            $request->filled('shift_id') && $request->shift_id !== 'All',
-                function ($query) use ($request) {
-                    $query->where('ord.shift_id', $request->shift_id);
-                }
-            )
-            ->sum('ordp.amount');
-
-        $allFrontdoorIds = User::where('role', 3)->pluck('id')->toArray();
-
-        $hasCashierFilter = !is_null($request->cashier_id) && $request->cashier_id !== '';
-
-        if ($hasCashierFilter) {
-            $targetUserIds = collect($allFrontdoorIds)
-                ->push((int) $request->cashier_id)
-                ->unique()
-                ->values()
-                ->toArray();
-        }
-
-        $orders = Order::with([
-                'user',
-                'tableSession.table',
-                'orderHeads.headPricingRule',
-                'payments.paymentMethod',
-                'addons',
-            ])
-            ->when($request->start_date && $request->end_date, function ($query) use ($request) {
-                $query->whereBetween('created_at', [
-                    $request->start_date . ' 00:00:00',
-                    $request->end_date . ' 23:59:59',
-                ]);
-            })
-            ->when(!is_null($request->status) && $request->status !== '', function ($query) use ($request) {
-                $query->where('status', $request->status);
-            })
-            ->when($hasCashierFilter, function ($query) use ($targetUserIds) {
-                $query->whereIn('user_id', $targetUserIds);  // frontdoor IDs + selected cashier
-            })
-            ->when($request->shift_id !== null && $request->shift_id !== 'All', function ($query) use ($request) {
-                $query->where('shift_id', $request->shift_id);
-            })
-
-            ->orderBy('created_at', 'desc')
+            ->select('pm.name as payment_method_name', DB::raw('SUM(ordp.amount) as total'))
+            ->groupBy('pm.id', 'pm.name')
             ->get();
-        
-        $consumedAddons = [];
-        foreach ($orders as $order) {
-            $order->total_addons = $order->addons->sum('subtotal');
 
-            foreach ($order->addons as $addon) {
-
-                $itemName = $addon->item_name;
-
-                // Initialize item if not existing
-                if (!isset($consumedAddons[$itemName])) {
-                    $consumedAddons[$itemName] = [
-                        'item_name' => $itemName,
-                        'quantity'  => 0,
-                        'unit_price'=> $addon->unit_price,
-                        'total'     => 0,
-                    ];
-                }
-
-                // Accumulate quantity
-                $consumedAddons[$itemName]['quantity'] += $addon->quantity;
-
-                // Accumulate total
-                $consumedAddons[$itemName]['total'] += (
-                    $addon->unit_price * $addon->quantity
-                );
-            }
-        }
-        $consumedAddons = array_values($consumedAddons);
-        // Log::info('Orders with addons calculated');
-        // Log::info($consumedAddons);
-
-        // Log::info('Consumed Addons: ' . json_encode($consumedAddons));
-        // Log::info('cashier_expenses: ' . $cashier_expenses);
-        // Log::info('totalCashSales: ' . $totalCashSales);
-        // Log::info('totalGcashSales: ' . $totalGcashSales);
-        // Log::info('Orders fetched: ' . $orders->count());
-        // Log::info($orders);
-
-        return response()->json([
-            'orders' => $orders,
-            'totalCashierExpenses' => (float)$cashier_expenses,
-            'totalCashSales' => (float)$totalCashSales,
-            'totalGcashSales' => (float)$totalGcashSales,
-            'totalMayaSales'=> (float)$totalMayaSales,
-            'totalReservationFees' => (float)$totalReservationFee,
-            'consumedAddons' => $consumedAddons,
-            'payments' => $payments,
-        ]);
+        // Merge: sum totals where the same payment method appears in both result sets
+        return $dineIn
+            ->concat($rsvp)
+            ->groupBy('payment_method_name')
+            ->map(fn($group) => (float) $group->sum('total'))
+            ->toArray();
     }
 
-    public function fetchSalesReport04202026(Request $request)
-    {
-        Log::info($request->only([
-            'start_date',
-            'end_date',
-            'status',
-            'cashier_id',
-        ]));
-
-        $orders = Order::with([
-                'user',
-                'tableSession.table',
-                'orderHeads.headPricingRule',
-                'payments.paymentMethod'
-            ])
-            ->when($request->start_date && $request->end_date, function ($query) use ($request) {
-                $query->whereBetween('created_at', [
-                    $request->start_date . ' 00:00:00',
-                    $request->end_date . ' 23:59:59',
-                ]);
-            })
-            ->when(!is_null($request->status) && $request->status !== '', function ($query) use ($request) {
-                $query->where('status', $request->status);
-            })
-            ->when(!is_null($request->cashier_id) && $request->cashier_id !== '', function ($query) use ($request) {
-                $query->where('user_id', $request->cashier_id);
-            })
-            ->orderBy('created_at', 'desc')
-            ->get();
-
-        return response()->json([
-            'orders' => $orders,
-        ]);
-    }
-
-    public function printSalesReport(Request $request)
-    {
-        $allFrontdoorIds = User::where('role', 3)->pluck('id')->toArray();
-        $targetUserIds = collect($allFrontdoorIds);
-        $totalReservationFee = DB::table('orders as ord')
-            ->join('order_payments as ordp', 'ordp.order_id', '=', 'ord.id')
-            ->join('payment_methods as pm', 'pm.id', '=', 'ordp.payment_method_id')
-            ->leftJoin('reservations as res', 'res.id', '=', 'ord.reservation_id') // ← also remove this if res.* isn't used anywhere else in the query
-            ->where('pm.id', 13)
-            ->where('ordp.is_void', 0)
-            ->where('ord.status', 'paid')
-            ->whereNull('ordp.remarks')
-            ->when($request->start_date && $request->end_date, function ($query) use ($request) {
-                $query->whereBetween('ord.created_at', [
-                    $request->start_date . ' 00:00:00',
-                    $request->end_date . ' 23:59:59',
-                ]);
-            })
-            ->when(!empty($allFrontdoorIds), function ($query) use ($allFrontdoorIds) {
-                $query->whereIn('ord.user_id', $allFrontdoorIds);
-            })
-            ->when(!is_null($request->shift_id) && $request->shift_id !== 'All', function ($query) use ($request) {
-                $query->where('ord.shift_id', $request->shift_id);
-            })
-            ->sum('ordp.amount');
-
-        $cashierName = 'All Cashiers';
-
-        if (!empty($request->cashier_id)) {
-            $cashier = \App\Models\User::find($request->cashier_id);
-            $cashierName = $cashier?->name ?? 'Unknown Cashier';
-        }
-
-        $orders = Order::with([
-                'user',
-                'tableSession.table',
-                'orderHeads.headPricingRule',
-                'payments.paymentMethod'
-            ])
-            ->when($request->start_date && $request->end_date, function ($query) use ($request) {
-                $query->whereBetween('created_at', [
-                    $request->start_date . ' 00:00:00',
-                    $request->end_date . ' 23:59:59',
-                ]);
-            })
-            ->when(!is_null($request->status) && $request->status !== '', function ($query) use ($request) {
-                $query->where('status', $request->status);
-            })
-            ->when(!is_null($request->cashier_id) && $request->cashier_id !== '', function ($query) use ($request) {
-                $query->where('user_id', $request->cashier_id);
-            })
-            ->orderBy('created_at', 'desc')
-            ->get();
-
-        $grossSales = $orders->where('status', 'paid')->sum('subtotal');
-        $totalDiscount = $orders->where('status', 'paid')->sum('total_discount');
-        // $netSales = $orders->where('status', 'paid')->sum('total');
-        $voidedSales = $orders->where('status', 'cancelled')->sum('total');
-
-        $mpdf = new Mpdf([
-            'format' => 'A4',
-            'orientation' => 'L',
-        ]);
-
-        $totalCashSales = DB::table('orders as ord')
-            ->join('order_payments as ordp', 'ordp.order_id', '=', 'ord.id')
-            ->join('payment_methods as pm', 'pm.id', '=', 'ordp.payment_method_id')
-            ->where('pm.id', 1) // Cash
-            ->where('ordp.is_void', 0)
-            ->where('ord.status', 'paid')
-            ->when($request->start_date && $request->end_date, function ($query) use ($request) {
-                $query->whereBetween('ord.created_at', [
-                    $request->start_date . ' 00:00:00',
-                    $request->end_date . ' 23:59:59',
-                ]);
-            })
-            // ->when($request->cashier_id, function ($query) use ($request) {
-            //     $query->where('ord.user_id', $request->cashier_id);
-            // })
-            ->when(!is_null($request->cashier_id) && $request->cashier_id !== '', function ($query) use ($request) {
-                $query->where('ordp.received_by', $request->cashier_id);
-            })
-            ->when($request->shift_id !== null && $request->shift_id !== 'All', function ($query) use ($request) {
-                $query->where('ord.shift_id', $request->shift_id);
-            })
-            ->sum('ordp.amount'); // ← was ord.total
-
-        $expensesQuery = Expense::whereNotNull('shift_id')
-            ->when($request->start_date && $request->end_date, function ($query) use ($request) {
-                $query->whereBetween('expense_date', [
-                    $request->start_date . ' 00:00:00',
-                    $request->end_date . ' 23:59:59',
-                ]);
-            })
-            ->when($request->cashier_id, function ($query) use ($request) {
-                $query->where('created_by', $request->cashier_id);
-            })
-            ->when($request->shift_id, function ($query) use ($request) {
-                $query->where('shift_id', $request->shift_id);
-            });
-
-        $totalExpenses = $expensesQuery->sum('amount');
-        $netSales = $orders->where('status', 'paid')->sum('total') - $totalExpenses;
-
-        // $totalReservationFee = DB::table('orders as ord')
-        //     ->join('order_payments as ordp', 'ordp.order_id', '=', 'ord.id')
-        //     ->join('payment_methods as pm', 'pm.id', '=', 'ordp.payment_method_id')
-        //     ->where('pm.id', 13) // Reservation Fee
-        //     ->where('ordp.is_void', 0)
-        //     ->where('ord.status', 'paid')
-        //     ->when($request->start_date && $request->end_date, function ($query) use ($request) {
-        //         $query->whereBetween('ord.created_at', [
-        //             $request->start_date . ' 00:00:00',
-        //             $request->end_date . ' 23:59:59',
-        //         ]);
-        //     })
-        //     ->when($request->shift_id !== null && $request->shift_id !== 'All', function ($query) use ($request) {
-        //         $query->where('ord.shift_id', $request->shift_id);
-        //     })
-        //     ->sum('ordp.amount');
-        
-            Log::info('totalReservationFee: --------'. $totalReservationFee); //bert
-
-        $totalGcashSales = DB::table('orders as ord')
-            ->join('order_payments as ordp', 'ordp.order_id', '=', 'ord.id')
-            ->join('payment_methods as pm', 'pm.id', '=', 'ordp.payment_method_id')
-            ->where('pm.id', 2) // Gcash
-            ->where('ordp.is_void', 0)
-            ->where('ord.status', 'paid')
-            ->when($request->start_date && $request->end_date, function ($query) use ($request) {
-                $query->whereBetween('ord.created_at', [
-                    $request->start_date . ' 00:00:00',
-                    $request->end_date . ' 23:59:59',
-                ]);
-            })
-            ->when(!is_null($request->cashier_id) && $request->cashier_id !== '', function ($query) use ($request) {
-                $query->where('ordp.received_by', $request->cashier_id);
-            })
-            ->when($request->shift_id !== null && $request->shift_id !== 'All', function ($query) use ($request) {
-                $query->where('ord.shift_id', $request->shift_id);
-            })
-            ->sum('ordp.amount');
-        
-        $consumedAddons = [];
-        foreach ($orders as $order) {
-            $order->total_addons = $order->addons->sum('subtotal');
-
-            foreach ($order->addons as $addon) {
-
-                $itemName = $addon->item_name;
-
-                // Initialize item if not existing
-                if (!isset($consumedAddons[$itemName])) {
-                    $consumedAddons[$itemName] = [
-                        'item_name' => $itemName,
-                        'quantity'  => 0,
-                        'unit_price'=> $addon->unit_price,
-                        'total'     => 0,
-                    ];
-                }
-
-                // Accumulate quantity
-                $consumedAddons[$itemName]['quantity'] += $addon->quantity;
-
-                // Accumulate total
-                $consumedAddons[$itemName]['total'] += (
-                    $addon->unit_price * $addon->quantity
-                );
-            }
-        }
-        $consumedAddons = array_values($consumedAddons);
-        Log::info('Consumed Addons for PDF: ' . json_encode($consumedAddons));
-        $html = view('reports.SalesReport', [
-            'orders' => $orders,
-            'startDate' => $request->start_date,
-            'endDate' => $request->end_date,
-            'status' => $request->status,
-            'cashierId' => $request->cashier_id,
-            'grossSales' => $grossSales,
-            'totalDiscount' => $totalDiscount,
-            'totalExpenses' => $totalExpenses,
-            'netSales' => $netSales,
-            'voidedSales' => $voidedSales,
-            'cashierName' => $cashierName,
-            'totalCashSales' => $totalCashSales,
-            'totalGcashSales' => $totalGcashSales,
-            'consumedAddons' => $consumedAddons,
-            'totalReservationFee' => $totalReservationFee,
-        ])->render();
-
-        $mpdf->WriteHTML($html);
-
-        return $mpdf->Output('Sales_Report.pdf', 'I');
-    }
-
-    public function printSalesSummaryReport(Request $request)
-    {
-
-        $posted_cashes = \App\Models\CashRegister::with(['cashier', 'shift'])
-            ->when($request->shift_id !== null && $request->shift_id !== 'All', function ($query) use ($request) {
-                $query->where('shift_id', $request->shift_id);
-            })
-            ->when($request->cashier_id, function ($query) use ($request) {
-                $query->where('cashier_id', $request->cashier_id);
-            })
-            ->when($request->start_date && $request->end_date, function ($query) use ($request) {
-                $query->whereBetween('created_at', [
-                    $request->start_date . ' 00:00:00',
-                    $request->end_date . ' 23:59:59',
-                ]);
-            })
-            ->get();
-
-
-        $cashierName = 'All Cashiers';
-
-        if (!empty($request->cashier_id)) {
-            $cashier = \App\Models\User::find($request->cashier_id);
-            $cashierName = $cashier?->name ?? 'Unknown Cashier';
-        }
-
-        $orders = Order::with([
-                'user',
-                'tableSession.table',
-                'orderHeads.headPricingRule',
-                'payments.paymentMethod'
-            ])
-            ->when($request->start_date && $request->end_date, function ($query) use ($request) {
-                $query->whereBetween('created_at', [
-                    $request->start_date . ' 00:00:00',
-                    $request->end_date . ' 23:59:59',
-                ]);
-            })
-            ->when(!is_null($request->status) && $request->status !== '', function ($query) use ($request) {
-                $query->where('status', $request->status);
-            })
-            ->when(!is_null($request->cashier_id) && $request->cashier_id !== '', function ($query) use ($request) {
-                $query->where('user_id', $request->cashier_id);
-            })
-            ->orderBy('created_at', 'desc')
-            ->get();
-
-        $grossSales = $orders->where('status', 'paid')->sum('subtotal');
-        $totalDiscount = $orders->where('status', 'paid')->sum('total_discount');
-        // $netSales = $orders->where('status', 'paid')->sum('total');
-        $voidedSales = $orders->where('status', 'cancelled')->sum('total');
-
-        $mpdf = new Mpdf([
-            'format' => 'A4',
-            'orientation' => 'L',
-        ]);
-
-        $totalCashSales = DB::table('orders as ord')
-            ->join('order_payments as ordp', 'ordp.order_id', '=', 'ord.id')
-            ->join('payment_methods as pm', 'pm.id', '=', 'ordp.payment_method_id')
-            ->where('pm.id', 1) // Cash
-            ->where('ordp.is_void', 0)
-            ->where('ord.status', 'paid')
-            ->when($request->start_date && $request->end_date, function ($query) use ($request) {
-                $query->whereBetween('ord.created_at', [
-                    $request->start_date . ' 00:00:00',
-                    $request->end_date . ' 23:59:59',
-                ]);
-            })
-            ->when($request->cashier_id, function ($query) use ($request) {
-                $query->where('ord.user_id', $request->cashier_id);
-            })
-            ->sum('ord.total');
-
-        $expensesQuery = Expense::with(['creator', 'shift'])  // <-- this was missing
-            ->when($request->start_date && $request->end_date, function ($query) use ($request) {
-                $query->whereBetween('expense_date', [
-                    $request->start_date . ' 00:00:00',
-                    $request->end_date . ' 23:59:59',
-                ]);
-            })
-            ->when($request->cashier_id, function ($query) use ($request) {
-                $query->where('created_by', $request->cashier_id);
-            })
-            ->when($request->shift_id !== null && $request->shift_id !== 'All', function ($query) use ($request) {
-                $query->where('shift_id', $request->shift_id);
-            });
-
-        $totalExpenses = $expensesQuery->sum('amount');
-        $expenses      = $expensesQuery->get();
-
-        $netSales = $orders->where('status', 'paid')->sum('total') - $totalExpenses;
-
-        $totalGcashSales = DB::table('orders as ord')
-            ->join('order_payments as ordp', 'ordp.order_id', '=', 'ord.id')
-            ->join('payment_methods as pm', 'pm.id', '=', 'ordp.payment_method_id')
-            ->where('pm.id', 2) // Cash
-            ->where('ordp.is_void', 0)
-            ->where('ord.status', 'paid')
-            ->when($request->start_date && $request->end_date, function ($query) use ($request) {
-                $query->whereBetween('ord.created_at', [
-                    $request->start_date . ' 00:00:00',
-                    $request->end_date . ' 23:59:59',
-                ]);
-            })
-            ->when($request->cashier_id, function ($query) use ($request) {
-                $query->where('ord.user_id', $request->cashier_id);
-            })
-            ->sum('ord.total');
-
-        try {
-            $html = view('reports.SalesSummaryReport', [
-                'orders'          => $orders,
-                'startDate'       => $request->start_date,
-                'endDate'         => $request->end_date,
-                'status'          => $request->status,
-                'cashierId'       => $request->cashier_id,
-                'grossSales'      => $grossSales,
-                'totalDiscount'   => $totalDiscount,
-                'totalExpenses'   => $totalExpenses,
-                'netSales'        => $netSales,
-                'voidedSales'     => $voidedSales,
-                'cashierName'     => $cashierName,
-                'totalCashSales'  => $totalCashSales,
-                'totalGcashSales' => $totalGcashSales,
-                'posted_cashes'   => $posted_cashes,
-                'expenses'        => $expenses,
-            ])->render();
-
-            $mpdf->WriteHTML($html);
-
-            return $mpdf->Output('Sales_Report.pdf', 'I');
-
-        } catch (\Throwable $e) {
-            Log::error('PDF render failed', [
-                'message' => $e->getMessage(),
-                'file'    => $e->getFile(),
-                'line'    => $e->getLine(),
-                'trace'   => $e->getTraceAsString(),
-            ]);
-
-            return response()->json([
-                'error'   => $e->getMessage(),
-                'file'    => $e->getFile(),
-                'line'    => $e->getLine(),
-            ], 500);
-        }
-    }
-
-    public function exportSalesReportExcel(Request $request)
-    {
-        $startDate = $request->input('start_date');
-        $endDate   = $request->input('end_date');
-        $status    = $request->input('status', 'paid');
-        $cashierId = $request->input('cashier_id');
-        $shiftId   = $request->input('shift_id');
-
-        // ── Mirror fetchSalesReport's cashier/frontdoor logic ────────────────
-        $allFrontdoorIds  = User::where('role', 3)->pluck('id')->toArray();
+    /**
+     * Fetch all sales report data in one place.
+     * Used by both the JSON endpoint and the Excel export.
+     */
+    private function getSalesReportData(
+        ?string $startDate,
+        ?string $endDate,
+        ?string $status,
+        ?string $cashierId,
+        ?string $shiftId,
+    ): array {
         $hasCashierFilter = !is_null($cashierId) && $cashierId !== '';
+        $targetUserIds    = $this->resolveTargetUserIds($cashierId);
 
-        if ($hasCashierFilter) {
-            $targetUserIds = collect($allFrontdoorIds)
-                ->push((int) $cashierId)
-                ->unique()
-                ->values()
-                ->toArray();
-        }
-
-        $orders = Order::with([
-                'payments.paymentMethod',
-                'user',
-                'tableSession.table',
-                'addons',
-            ])
-            ->when($startDate && $endDate, fn($q) => $q->whereBetween('created_at', [
-                $startDate . ' 00:00:00',
-                $endDate   . ' 23:59:59',
-            ]))
-            ->when($status !== '', fn($q) => $q->where('status', $status))
-            ->when($hasCashierFilter, fn($q) => $q->whereIn('user_id', $targetUserIds))
-            ->when($shiftId && $shiftId !== 'All', fn($q) => $q->where('shift_id', $shiftId))
-            ->orderBy('created_at', 'asc')
-            ->get();
-
-        // ── Expenses ──────────────────────────────────────────────────────────
-        $cashier_expenses = Expense::when($shiftId && $shiftId !== 'All',
-                fn($q) => $q->where('shift_id', $shiftId))
-            ->when($hasCashierFilter,
-                fn($q) => $q->where('created_by', $cashierId))
+        // ── Expenses ──────────────────────────────────────────────────────────────
+        $totalExpenses = (float) Expense::when(
+                !is_null($shiftId) && $shiftId !== 'All',
+                fn($q) => $q->where('shift_id', $shiftId)
+            )
+            ->when($hasCashierFilter, fn($q) => $q->whereIn('created_by', $targetUserIds))
             ->when($startDate && $endDate, fn($q) => $q->whereBetween('expense_date', [
                 $startDate . ' 00:00:00',
                 $endDate   . ' 23:59:59',
             ]))
             ->sum('amount');
 
-        // ── All payment methods grouped (same as fetchSalesReport) ───────────
-        $allPayments = DB::table('orders as ord')
+        // ── Payments breakdown (dine-in + RSVP merged) ────────────────────────────
+        $payments = $this->buildPaymentsBreakdown(
+            $startDate, $endDate, $shiftId, $hasCashierFilter, $targetUserIds
+        );
+
+        // ── Per-method totals (Cash=1, GCash=2, Maya=3) ───────────────────────────
+        $buildMethodTotal = function (int $methodId) use (
+            $startDate, $endDate, $shiftId, $hasCashierFilter, $targetUserIds
+        ) {
+            return (float) DB::table('orders as ord')
+                ->join('order_payments as ordp', 'ordp.order_id', '=', 'ord.id')
+                ->where('ordp.payment_method_id', $methodId)
+                ->where('ordp.is_void', 0)
+                ->where('ord.status', 'paid')
+                ->when($startDate && $endDate, fn($q) => $q->whereBetween('ord.created_at', [
+                    $startDate . ' 00:00:00',
+                    $endDate   . ' 23:59:59',
+                ]))
+                ->when($hasCashierFilter, fn($q) => $q->whereIn('ord.user_id', $targetUserIds))
+                ->when(
+                    !is_null($shiftId) && $shiftId !== 'All',
+                    fn($q) => $q->where('ord.shift_id', $shiftId)
+                )
+                ->sum('ordp.amount');
+        };
+
+        $totalCashSales  = $buildMethodTotal(1);
+        $totalGcashSales = $buildMethodTotal(2);
+        $totalMayaSales  = $buildMethodTotal(3);
+
+        // ── Reservation fees (pm.id=13, RSVP orders only, no remarks) ────────────
+        $totalReservationFees = (float) DB::table('orders as ord')
             ->join('order_payments as ordp', 'ordp.order_id', '=', 'ord.id')
-            ->join('payment_methods as pm', 'pm.id', '=', 'ordp.payment_method_id')
+            ->where('ordp.payment_method_id', 13)
             ->where('ordp.is_void', 0)
             ->where('ord.status', 'paid')
-            ->when($startDate && $endDate, fn($q) => $q->whereBetween('ord.created_at', [
-                $startDate . ' 00:00:00',
-                $endDate   . ' 23:59:59',
-            ]))
-            ->when($hasCashierFilter, fn($q) => $q->where('ord.user_id', $cashierId))
-            ->when($shiftId && $shiftId !== 'All', fn($q) => $q->where('ord.shift_id', $shiftId))
-            ->select('pm.name as payment_method_name', DB::raw('SUM(ordp.amount) as total'))
-            ->groupBy('pm.id', 'pm.name')
-            ->get();
-
-        $paymentTotals = $allPayments->pluck('total', 'payment_method_name')->toArray();
-
-        // ── Reservation fee — frontdoor only, no remarks ─────────────────────
-        $totalReservation = (float) DB::table('orders as ord')
-            ->join('order_payments as ordp', 'ordp.order_id', '=', 'ord.id')
-            ->join('payment_methods as pm', 'pm.id', '=', 'ordp.payment_method_id')
-            ->where('pm.id', 13)
-            ->where('ordp.is_void', 0)
-            ->where('ord.status', 'paid')
+            ->whereNotNull('ord.reservation_id')
+            ->whereNull('ord.table_number')
             ->whereNull('ordp.remarks')
-            ->when(!empty($allFrontdoorIds), fn($q) => $q->whereIn('ord.user_id', $allFrontdoorIds))
             ->when($startDate && $endDate, fn($q) => $q->whereBetween('ord.created_at', [
                 $startDate . ' 00:00:00',
                 $endDate   . ' 23:59:59',
             ]))
-            ->when($shiftId && $shiftId !== 'All', fn($q) => $q->where('ord.shift_id', $shiftId))
+            ->when(
+                !is_null($shiftId) && $shiftId !== 'All',
+                fn($q) => $q->where('ord.shift_id', $shiftId)
+            )
             ->sum('ordp.amount');
 
-        // Override reservation fee in paymentTotals with the corrected value
-        $paymentTotals['Reservation Fee'] = $totalReservation;
+        // ── Orders (with relationships) ───────────────────────────────────────────
+        $orders = Order::with([
+                'user',
+                'tableSession.table',
+                'orderHeads.headPricingRule',
+                'payments.paymentMethod',
+                'addons',
+            ])
+            ->when($startDate && $endDate, fn($q) => $q->whereBetween('created_at', [
+                $startDate . ' 00:00:00',
+                $endDate   . ' 23:59:59',
+            ]))
+            ->when(!is_null($status) && $status !== '', fn($q) => $q->where('status', $status))
+            ->when($hasCashierFilter, fn($q) => $q->whereIn('user_id', $targetUserIds))
+            ->when(
+                !is_null($shiftId) && $shiftId !== 'All',
+                fn($q) => $q->where('shift_id', $shiftId)
+            )
+            ->orderBy('created_at', 'desc')
+            ->get();
 
-        // ── Gross = sum of ALL payment methods ────────────────────────────────
-        $grossSales    = collect($paymentTotals)->sum(fn($v) => (float) $v);
-        $totalExpenses = (float) $cashier_expenses;
-        $netSales      = $grossSales - $totalExpenses;
+        // ── Consumed add-ons ──────────────────────────────────────────────────────
+        $consumedAddons = [];
+        foreach ($orders as $order) {
+            $order->total_addons = $order->addons->sum('subtotal');
+
+            foreach ($order->addons as $addon) {
+                $key = $addon->item_name;
+                if (!isset($consumedAddons[$key])) {
+                    $consumedAddons[$key] = [
+                        'item_name'  => $key,
+                        'quantity'   => 0,
+                        'unit_price' => $addon->unit_price,
+                        'total'      => 0,
+                    ];
+                }
+                $consumedAddons[$key]['quantity'] += $addon->quantity;
+                $consumedAddons[$key]['total']    += $addon->unit_price * $addon->quantity;
+            }
+        }
+
+        $grossSales = collect($payments)->sum();
+        $netSales   = $grossSales - $totalExpenses;
+
+        return compact(
+            'orders',
+            'payments',
+            'totalExpenses',
+            'totalCashSales',
+            'totalGcashSales',
+            'totalMayaSales',
+            'totalReservationFees',
+            'consumedAddons',
+            'grossSales',
+            'netSales',
+        );
+    }
+
+
+    // ════════════════════════════════════════════════════════════════════════════
+    // PUBLIC ENDPOINTS — now thin wrappers around getSalesReportData()
+    // ════════════════════════════════════════════════════════════════════════════
+
+    public function fetchSalesReport(Request $request)
+    {
+        $data = $this->getSalesReportData(
+            $request->start_date,
+            $request->end_date,
+            $request->status,
+            $request->cashier_id,
+            $request->shift_id,
+        );
+
+        return response()->json([
+            'orders'               => $data['orders'],
+            'totalCashierExpenses' => $data['totalExpenses'],
+            'totalCashSales'       => $data['totalCashSales'],
+            'totalGcashSales'      => $data['totalGcashSales'],
+            'totalMayaSales'       => $data['totalMayaSales'],
+            'totalReservationFees' => $data['totalReservationFees'],
+            'consumedAddons'       => array_values($data['consumedAddons']),
+            'payments'             => $data['payments'],
+        ]);
+    }
+
+    public function exportSalesReportExcel(Request $request)
+    {
+        $startDate = $request->input('start_date');
+        $endDate   = $request->input('end_date');
+
+        $data = $this->getSalesReportData(
+            $startDate,
+            $endDate,
+            $request->input('status', 'paid'),
+            $request->input('cashier_id'),
+            $request->input('shift_id'),
+        );
 
         $filename = 'sales_report_' . now()->format('Ymd_His') . '.xlsx';
 
         return Excel::download(
             new SalesReportExport(
-                $orders,
-                $grossSales,
-                $totalExpenses,
-                $netSales,
-                $paymentTotals,
+                $data['orders'],
+                $data['grossSales'],
+                $data['totalExpenses'],
+                $data['netSales'],
+                $data['payments'],
                 $startDate ?? 'N/A',
                 $endDate   ?? 'N/A',
             ),
             $filename
         );
+    }
+
+    public function printSalesReport(Request $request)
+    {
+        $data = $this->getSalesReportData(
+            $request->start_date,
+            $request->end_date,
+            $request->status,
+            $request->cashier_id,
+            $request->shift_id,
+        );
+
+        // ── Cashier display name ──────────────────────────────────────────────────
+        $cashierName = 'All Cashiers';
+        if (!empty($request->cashier_id)) {
+            $cashier     = User::find($request->cashier_id);
+            $cashierName = $cashier?->name ?? 'Unknown Cashier';
+        }
+
+        // ── Order-level aggregates (computed from the already-fetched collection) ─
+        $grossSales    = $data['orders']->where('status', 'paid')->sum('subtotal');
+        $totalDiscount = $data['orders']->where('status', 'paid')->sum('total_discount');
+        $voidedSales   = $data['orders']->where('status', 'cancelled')->sum('total');
+
+        // ── Render PDF ────────────────────────────────────────────────────────────
+        $mpdf = new Mpdf([
+            'format'      => 'A4',
+            'orientation' => 'L',
+        ]);
+
+        $html = view('reports.SalesReport', [
+            'orders'              => $data['orders'],
+            'startDate'           => $request->start_date,
+            'endDate'             => $request->end_date,
+            'status'              => $request->status,
+            'cashierId'           => $request->cashier_id,
+            'cashierName'         => $cashierName,
+            'grossSales'          => $grossSales,
+            'totalDiscount'       => $totalDiscount,
+            'totalExpenses'       => $data['totalExpenses'],
+            'netSales'            => $data['netSales'],
+            'voidedSales'         => $voidedSales,
+            'totalCashSales'      => $data['totalCashSales'],
+            'totalGcashSales'     => $data['totalGcashSales'],
+            'totalReservationFee' => $data['totalReservationFees'],
+            'consumedAddons'      => array_values($data['consumedAddons']),
+            'payments'            => $data['payments'],
+        ])->render();
+
+        $mpdf->WriteHTML($html);
+
+        return $mpdf->Output('Sales_Report.pdf', 'I');
     }
 }

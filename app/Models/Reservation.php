@@ -14,7 +14,7 @@ class Reservation extends Model
         'name', 'pricing_scheme_id', 'pax',
         'reservation_datetime', 'contact_number', 'remarks', 'status',
         'reservation_fee', 'fee_payment_method', 'fee_reference_no',
-        'table_session_id',
+        'table_session_id','shift_id'
     ];
  
     protected $casts = [

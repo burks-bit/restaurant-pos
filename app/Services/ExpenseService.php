@@ -92,9 +92,6 @@ class ExpenseService
 
     public function store(Request $request)
     {
-        Log::info('store expense');
-        Log::info($request->all());
-
         // 🔥 FORCE category = 5 if shift_id exists
         if ($request->filled('shift_id')) {
             $request->merge([
@@ -127,13 +124,6 @@ class ExpenseService
         $category = $request->category;
         $startDate = $request->start_date;
         $endDate = $request->end_date;
-
-        Log::info('Filtering expenses with: ', [
-            'search' => $search,
-            'category' => $category,
-            'start_date' => $startDate,
-            'end_date' => $endDate,
-        ]);
 
         $today = Carbon::today()->toDateString();
 
@@ -182,18 +172,13 @@ class ExpenseService
         $date = $request->input('date', now()->toDateString());
         $role = Auth::user()->role;
 
-        Log::info('Authenticated role: ' . $role);
-
         $query = Expense::with('creator')
             ->whereDate('created_at', $date)
             ->orderBy('created_at', 'desc');
 
         // Only restrict if NOT role 0 or 1
         if (!in_array($role, [0, 1])) {
-            Log::info('Applying created_by filter for user ID: ' . Auth::id());
             $query->where('created_by', Auth::id());
-        } else {
-            Log::info('Role has full access, no created_by filter applied.');
         }
 
         $expenses = $query->get();

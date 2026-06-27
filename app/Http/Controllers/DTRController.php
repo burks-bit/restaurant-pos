@@ -59,6 +59,16 @@ class DTRController extends Controller
         }
     }
 
+    public function getAllEmployeeDailyLogs()
+    {
+        try {
+            return $this->dtrService->getAllEmployeeDailyLogs();
+        } catch (\Throwable $e) {
+            Log::error('DTRController@getAllEmployeeDailyLogs failed: ' . $e->getMessage());
+            return back()->with('error', 'Failed to load employee overtime.');
+        }
+    }
+
     public function saveOvertime(Request $request)
     {
         try {

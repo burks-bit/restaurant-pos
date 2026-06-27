@@ -116,7 +116,7 @@
             v-if="showAddModal"
             class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
           >
-            <div class="bg-white rounded-lg w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto">
+            <div class="bg-white rounded-lg w-full max-w-4xl p-6 max-h-[90vh] overflow-y-auto">
               <h2 class="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
                 <i class="fa fa-calendar"></i> Add Reservation
               </h2>
@@ -125,6 +125,7 @@
                 :pricing-schemes="pricingSchemes"
                 :pricing-rules="pricingRules"
                 :processing="processing"
+                :shifts="shifts"
                 @submit="saveReservation"
                 @cancel="showAddModal = false"
                 @qty-change="(i) => onQtyChange(newForm.pax_breakdown, i)"
@@ -140,7 +141,7 @@
             v-if="showEditModal"
             class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
           >
-            <div class="bg-white rounded-lg w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto">
+            <div class="bg-white rounded-lg w-full max-w-4xl p-6 max-h-[90vh] overflow-y-auto">
               <h2 class="text-lg font-semibold text-gray-900 mb-4">Edit Reservation</h2>
               <ReservationForm
                 :form="editForm"
@@ -219,7 +220,9 @@ const reservations = computed(() => page.props.reservations ?? [])
 const pricingSchemes = computed(() => page.props.pricing_schemes ?? [])
 const pricingRules = computed(() => page.props.pricing_rules ?? [])
 const availableTables = computed(() => page.props.available_tables ?? [])
+const shifts = computed(() => page.props.shifts ?? [])
 
+console.log(shifts.value)
 const {
   search, statusFilter, processing,
   showAddModal, showEditModal, showArrivalModal,
@@ -241,6 +244,7 @@ const onSchemeChange = (form, schemeId) => {
     qty: 0,
     price_snapshot: parseFloat(rule.price ?? 0),
     subtotal: 0,
+    shift_id: null, // Initialize shift_id to null
   }))
 }
 </script>

@@ -203,14 +203,62 @@
       </div>
     </div>
 
-    <!-- Toast -->
-    <div
-      v-if="toast.show"
-      class="fixed top-5 right-5 z-50 px-4 py-3 rounded-lg shadow-lg text-white transition"
-      :class="toast.type === 'success' ? 'bg-green-500' : 'bg-red-500'"
-    >
-      {{ toast.message }}
-    </div>
+    <!-- Toast (centered) -->
+    <Transition name="toast-fade">
+      <div
+        v-if="toast.show"
+        class="fixed inset-0 z-[9999] flex items-center justify-center bg-black bg-opacity-40 px-4"
+        @click.self="toast.show = false"
+      >
+        <div class="bg-white rounded-2xl shadow-2xl px-8 py-6 max-w-sm w-full flex flex-col items-center text-center">
+          <div
+            class="w-14 h-14 rounded-full flex items-center justify-center mb-4"
+            :class="{
+              'bg-green-100': toast.type === 'success',
+              'bg-red-100': toast.type === 'error',
+              'bg-yellow-100': toast.type === 'warning',
+            }"
+          >
+            <i
+              class="fa text-2xl"
+              :class="{
+                'fa-check-circle text-green-500': toast.type === 'success',
+                'fa-times-circle text-red-500': toast.type === 'error',
+                'fa-exclamation-triangle text-yellow-500': toast.type === 'warning',
+              }"
+            ></i>
+          </div>
+
+          <p
+            class="text-lg font-semibold mb-1"
+            :class="{
+              'text-green-700': toast.type === 'success',
+              'text-red-700': toast.type === 'error',
+              'text-yellow-700': toast.type === 'warning',
+            }"
+          >
+            {{ toast.title ?? (toast.type === 'success' ? 'Success' : toast.type === 'warning' ? 'Heads up' : 'Failed') }}
+          </p>
+
+          <p class="text-gray-600 text-sm leading-relaxed">
+            {{ toast.message }}
+          </p>
+
+          <button
+            @click="toast.show = false"
+            class="mt-5 px-6 py-2 rounded-lg text-white text-sm font-medium transition"
+            :class="{
+              'bg-green-500 hover:bg-green-600': toast.type === 'success',
+              'bg-red-500 hover:bg-red-600': toast.type === 'error',
+              'bg-yellow-500 hover:bg-yellow-600': toast.type === 'warning',
+            }"
+          >
+            OK
+          </button>
+        </div>
+      </div>
+    </Transition>
+
   </AuthenticatedLayout>
 </template>
 
@@ -302,3 +350,14 @@ const capturePhoto = () => {
   }, 'image/jpeg')
 }
 </script>
+
+<style scoped>
+.toast-fade-enter-active,
+.toast-fade-leave-active {
+  transition: opacity 0.2s ease;
+}
+.toast-fade-enter-from,
+.toast-fade-leave-to {
+  opacity: 0;
+}
+</style>

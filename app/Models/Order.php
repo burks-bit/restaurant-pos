@@ -101,4 +101,19 @@ class Order extends Model
     {
         return $this->belongsTo(Reservation::class, 'reservation_id');
     }
+
+    public static function getCashierIdOnDuty($now, ?int $shiftId): ?int
+    {
+        if (!$shiftId) {
+            return null;
+        }
+
+        $order = self::whereDate('created_at', $now)
+            ->where('shift_id', $shiftId)
+            ->whereNotNull('user_id')
+            ->latest('created_at')
+            ->first();
+
+        return $order?->user_id;
+    }
 }
