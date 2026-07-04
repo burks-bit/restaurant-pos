@@ -520,123 +520,34 @@ class ReportService
     public function salesReportIndex()
     {
         $today = now()->toDateString();
-        
+
         $cashiers = User::where('role', 2)->get();
-        $shifts = \App\Models\Shift::all();
+        $shifts   = \App\Models\Shift::all();
 
-        $orders = Order::with([
-                'user',
-                'tableSession.table',
-                'orderHeads.headPricingRule',
-                'payments.paymentMethod'
-            ])
-            ->whereDate('created_at', $today)
-            ->where('status', 'paid')
-            ->orderBy('created_at', 'desc')
-            ->get();
-        
-        $consumedAddons = [];
-        foreach ($orders as $order) {
-            $order->total_addons = $order->addons->sum('subtotal');
-
-            foreach ($order->addons as $addon) {
-
-                $itemName = $addon->item_name;
-
-                // Initialize item if not existing
-                if (!isset($consumedAddons[$itemName])) {
-                    $consumedAddons[$itemName] = [
-                        'item_name' => $itemName,
-                        'quantity'  => 0,
-                        'unit_price'=> $addon->unit_price,
-                        'total'     => 0,
-                    ];
-                }
-
-                // Accumulate quantity
-                $consumedAddons[$itemName]['quantity'] += $addon->quantity;
-
-                // Accumulate total
-                $consumedAddons[$itemName]['total'] += (
-                    $addon->unit_price * $addon->quantity
-                );
-            }
-        }
-        $consumedAddons = array_values($consumedAddons);
-
-        $cashier_expenses = Expense::whereNotNull('shift_id')
-            ->whereDate('expense_date', now()->toDateString())
-            ->sum('amount');
-
-        $userId = Auth::id(); // capture once, reuse below
-
-        $totalCashSales = DB::table('orders as ord')
-            ->join('order_payments as ordp', 'ordp.order_id', '=', 'ord.id')
-            ->join('payment_methods as pm', 'pm.id', '=', 'ordp.payment_method_id')
-            ->where('pm.id', 1) // Cash
-            ->where('ordp.is_void', 0)
-            ->where('ord.status', 'paid')
-            ->whereIn('ord.shift_id', [1, 2]) 
-            ->whereDate('ord.created_at', $today)
-            ->sum('ordp.amount');
-
-        $totalGcashSales = DB::table('orders as ord')
-            ->join('order_payments as ordp', 'ordp.order_id', '=', 'ord.id')
-            ->join('payment_methods as pm', 'pm.id', '=', 'ordp.payment_method_id')
-            ->where('pm.id', 2) // GCash
-            ->where('ordp.is_void', 0)
-            ->where('ord.status', 'paid')
-            ->whereIn('ord.shift_id', [1, 2]) 
-            ->whereDate('ord.created_at', $today)
-            ->sum('ordp.amount');
-        $totalMayaSales = DB::table('orders as ord')
-            ->join('order_payments as ordp', 'ordp.order_id', '=', 'ord.id')
-            ->join('payment_methods as pm', 'pm.id', '=', 'ordp.payment_method_id')
-            ->where('pm.id', 3) // Maya
-            ->where('ordp.is_void', 0)
-            ->where('ord.status', 'paid')
-            ->whereIn('ord.shift_id', [1, 2]) 
-            ->whereDate('ord.created_at', $today)
-            ->sum('ordp.amount');
-
-        $totalReservationFee = DB::table('orders as ord')
-            ->join('order_payments as ordp', 'ordp.order_id', '=', 'ord.id')
-            ->join('payment_methods as pm', 'pm.id', '=', 'ordp.payment_method_id')
-            ->where('pm.id', 13) // Reservation Fee
-            ->where('ordp.is_void', 0)
-            ->where('ord.status', 'paid')
-            ->whereIn('ord.shift_id', [1, 2]) 
-            ->whereDate('ord.created_at', $today)
-            ->sum('ordp.amount');
-
-        // ── Payment totals by method (today, all shifts) ──────────────────
-        $allPayments = DB::table('orders as ord')
-            ->join('order_payments as ordp', 'ordp.order_id', '=', 'ord.id')
-            ->join('payment_methods as pm', 'pm.id', '=', 'ordp.payment_method_id')
-            ->where('ordp.is_void', 0)
-            ->where('ord.status', 'paid')
-            ->whereIn('ord.shift_id', [1, 2])
-            ->whereDate('ord.created_at', $today)
-            ->select('pm.name as payment_method_name', DB::raw('SUM(ordp.amount) as total'))
-            ->groupBy('pm.id', 'pm.name')
-            ->get();
-
-        $payments = $allPayments->pluck('total', 'payment_method_name')->toArray();
+        $data = $this->getSalesReportData(
+            $today,   // startDate
+            $today,   // endDate
+            'paid',   // status
+            null,     // cashierId (no filter on initial load)
+            'All',    // shiftId (no filter on initial load)
+        );
 
         return Inertia::render('Reports/SalesReport', [
-            'shifts' => $shifts,
-            'orders' => $orders,
-            'startDate' => $today,
-            'endDate' => $today,
-            'cashiers' => $cashiers,
-            'selectedStatus' => 'paid',
-            'totalCashierExpenses' => (float)$cashier_expenses,
-            'totalCashSales' => (float)$totalCashSales,
-            'totalGcashSales' => (float)$totalGcashSales,
-            'totalMayaSales' => (float)$totalMayaSales,
-            'totalReservationFees' => (float)$totalReservationFee,
-            'consumedAddons' => $consumedAddons,
-            'payments' => $payments,
+            'shifts'               => $shifts,
+            'orders'               => $data['orders'],
+            'startDate'            => $today,
+            'endDate'              => $today,
+            'cashiers'             => $cashiers,
+            'selectedStatus'       => 'paid',
+            'selectedCashier'      => '',
+            'selectedShift'        => 'All',
+            'totalCashierExpenses' => $data['totalExpenses'],
+            'totalCashSales'       => $data['totalCashSales'],
+            'totalGcashSales'      => $data['totalGcashSales'],
+            'totalMayaSales'       => $data['totalMayaSales'],
+            'totalReservationFees' => $data['totalReservationFees'],
+            'consumedAddons'       => array_values($data['consumedAddons']),
+            'payments'             => $data['payments'],
         ]);
     }
 
