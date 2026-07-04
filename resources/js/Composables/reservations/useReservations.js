@@ -22,6 +22,7 @@ export function useReservations(reservationsSource) {
     fee_payment_method: 'cash',
     fee_reference_no: '',
     shift_id: null,
+    cashier_employee_id: null,
   })
 
   const newForm = ref(emptyForm())
@@ -56,7 +57,7 @@ export function useReservations(reservationsSource) {
   function formatDateTime(value) {
     if (!value) return '-'
     return new Date(value).toLocaleString('en-PH', {
-      year: 'numeric', month: 'short', day: '2-digit',
+      year: 'numeric', month: '2-digit', day: '2-digit',
       hour: '2-digit', minute: '2-digit',
     })
   }
@@ -113,6 +114,7 @@ export function useReservations(reservationsSource) {
       fee_payment_method: reservation.fee_payment_method ?? 'cash',
       fee_reference_no: reservation.fee_reference_no ?? '',
       shift_id: reservation.shift_id ?? null,
+      cashier_employee_id: reservation.cashier_employee_id ?? null,
     }
     showEditModal.value = true
   }

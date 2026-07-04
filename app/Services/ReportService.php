@@ -17,6 +17,7 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Auth;
 use App\Exports\SalesReportExport;
+use App\Exports\SalesSummaryExport;
 
 class ReportService
 {
@@ -688,15 +689,36 @@ class ReportService
                     fn($q) => $q->where('ord.shift_id', $shiftId)
                 );
         };
-
+        
+        // original query for dine-in payments (before the fix)
         // Dine-in: orders with a table, excluding rows where reservation fee was applied at checkout
+        //  $dineIn = $baseQuery()
+        //      ->whereNotNull('ord.table_number')
+        //      ->whereNotIn('ord.id', fn($q) =>
+        //          $q->select('order_id')
+        //          ->from('order_payments')
+        //          ->where('remarks', 'Reservation fee applied')
+        //      )
+        //      ->when($hasCashierFilter, fn($q) => $q->whereIn('ord.user_id', $targetUserIds))
+        //      ->select('pm.name as payment_method_name', DB::raw('SUM(ordp.amount) as total'))
+        //      ->groupBy('pm.id', 'pm.name')
+        //      ->get();
+
+        // RSVP: reservation fee collection orders (no table yet, tied to a reservation)
+        //  $rsvp = $baseQuery()
+        //      ->whereNotNull('ord.reservation_id')
+        //      ->whereNull('ord.table_number')
+        //      ->whereNull('ordp.remarks')
+        //      ->select('pm.name as payment_method_name', DB::raw('SUM(ordp.amount) as total'))
+        //      ->groupBy('pm.id', 'pm.name')
+        //      ->get();
+
         $dineIn = $baseQuery()
             ->whereNotNull('ord.table_number')
-            ->whereNotIn('ord.id', fn($q) =>
-                $q->select('order_id')
-                ->from('order_payments')
-                ->where('remarks', 'Reservation fee applied')
-            )
+            ->where(function ($q) {
+                $q->whereNull('ordp.remarks')
+                  ->orWhere('ordp.remarks', '!=', 'Reservation fee applied');
+            })
             ->when($hasCashierFilter, fn($q) => $q->whereIn('ord.user_id', $targetUserIds))
             ->select('pm.name as payment_method_name', DB::raw('SUM(ordp.amount) as total'))
             ->groupBy('pm.id', 'pm.name')
@@ -707,6 +729,7 @@ class ReportService
             ->whereNotNull('ord.reservation_id')
             ->whereNull('ord.table_number')
             ->whereNull('ordp.remarks')
+            ->when($hasCashierFilter, fn($q) => $q->whereIn('ord.user_id', $targetUserIds))
             ->select('pm.name as payment_method_name', DB::raw('SUM(ordp.amount) as total'))
             ->groupBy('pm.id', 'pm.name')
             ->get();
@@ -717,6 +740,100 @@ class ReportService
             ->groupBy('payment_method_name')
             ->map(fn($group) => (float) $group->sum('total'))
             ->toArray();
+    }
+
+    /**
+     * Build the cashier sales summary (Total Sales / Plus DP / Less DP / Remaining Cash).
+     * Used by exportSalesSummaryReport(). Handles both per-cashier and consolidated ('All') modes.
+     */
+    private function buildSalesSummaryData(
+        ?string $startDate,
+        ?string $endDate,
+        ?string $shiftId,
+        ?string $cashierId
+    ): array {
+        $hasCashierFilter = !is_null($cashierId) && $cashierId !== '' && $cashierId !== 'All';
+        $targetUserIds    = $this->resolveTargetUserIds($hasCashierFilter ? $cashierId : null);
+
+        $baseOrderQuery = function () use ($startDate, $endDate, $shiftId) {
+            return DB::table('orders as ord')
+                ->where('ord.status', 'paid')
+                ->when($startDate && $endDate, fn($q) => $q->whereBetween('ord.created_at', [
+                    $startDate . ' 00:00:00',
+                    $endDate   . ' 23:59:59',
+                ]))
+                ->when(
+                    !is_null($shiftId) && $shiftId !== 'All',
+                    fn($q) => $q->where('ord.shift_id', $shiftId)
+                );
+        };
+
+        // ── Total Sales: full billed subtotal of dine-in orders, BEFORE any DP credit is netted out ──
+        $totalSales = (float) $baseOrderQuery()
+            ->whereNotNull('ord.table_number')
+            ->when($hasCashierFilter, fn($q) => $q->whereIn('ord.user_id', $targetUserIds))
+            ->sum('ord.subtotal');
+
+        // ── Plus DP: new reservation deposits collected today (fresh cash in, not yet redeemed) ──
+        $plusDP = (float) $baseOrderQuery()
+            ->join('order_payments as ordp', 'ordp.order_id', '=', 'ord.id')
+            ->whereNotNull('ord.reservation_id')
+            ->whereNull('ord.table_number')
+            ->whereNull('ordp.remarks')
+            ->where('ordp.payment_method_id', 13)
+            ->where('ordp.is_void', 0)
+            ->when($hasCashierFilter, fn($q) => $q->whereIn('ord.user_id', $targetUserIds))
+            ->sum('ordp.amount');
+
+        // ── Less DP: deposit credit redeemed against a dine-in bill today (already collected earlier) ──
+        $lessDP = (float) $baseOrderQuery()
+            ->join('order_payments as ordp', 'ordp.order_id', '=', 'ord.id')
+            ->whereNotNull('ord.table_number')
+            ->where('ordp.remarks', 'Reservation fee applied')
+            ->where('ordp.is_void', 0)
+            ->when($hasCashierFilter, fn($q) => $q->whereIn('ord.user_id', $targetUserIds))
+            ->sum('ordp.amount');
+
+        // Total Sales + Plus DP - Less DP == actual new cash collected today
+        // (identical to grossSales from buildPaymentsBreakdown, just derived via subtotal instead of payment rows)
+        $totalAmountOfSales = $totalSales + $plusDP - $lessDP;
+
+        // ── Expenses ──
+        $lessExpenses = (float) Expense::when(
+                !is_null($shiftId) && $shiftId !== 'All',
+                fn($q) => $q->where('shift_id', $shiftId)
+            )
+            ->when($hasCashierFilter, fn($q) => $q->whereIn('created_by', $targetUserIds))
+            ->when($startDate && $endDate, fn($q) => $q->whereBetween('expense_date', [
+                $startDate . ' 00:00:00',
+                $endDate   . ' 23:59:59',
+            ]))
+            ->sum('amount');
+
+        $remainingCash = $totalAmountOfSales - $lessExpenses;
+
+        // ── Payment breakdown (mode of payment totals, incl. Reservation Fee) — reuse existing logic ──
+        $paymentBreakdown = $this->buildPaymentsBreakdown(
+            $startDate, $endDate, $shiftId, $hasCashierFilter, $targetUserIds
+        );
+
+        $cashierName = 'All Cashiers';
+        if ($hasCashierFilter) {
+            $cashier     = User::find($cashierId);
+            $cashierName = $cashier?->name ?? 'Unknown Cashier';
+        }
+
+        return [
+            'isConsolidated'     => !$hasCashierFilter,
+            'cashierName'        => $cashierName,
+            'totalSales'         => $totalSales,
+            'plusDP'             => $plusDP,
+            'lessDP'             => $lessDP,
+            'totalAmountOfSales' => $totalAmountOfSales,
+            'lessExpenses'       => $lessExpenses,
+            'remainingCash'      => $remainingCash,
+            'paymentBreakdown'   => $paymentBreakdown,
+        ];
     }
 
     /**
@@ -859,6 +976,13 @@ class ReportService
 
     public function fetchSalesReport(Request $request)
     {
+        Log::info('Fetching sales report', [
+            'start_date' => $request->start_date,
+            'end_date'   => $request->end_date,
+            'status'     => $request->status,
+            'cashier_id' => $request->cashier_id,
+            'shift_id'   => $request->shift_id,
+        ]);
         $data = $this->getSalesReportData(
             $request->start_date,
             $request->end_date,
@@ -903,6 +1027,35 @@ class ReportService
                 $data['payments'],
                 $startDate ?? 'N/A',
                 $endDate   ?? 'N/A',
+            ),
+            $filename
+        );
+    }
+
+    public function exportSalesSummaryReport(Request $request)
+    {
+        $startDate = $request->input('start_date');
+        $endDate   = $request->input('end_date');
+        $cashierId = $request->input('cashier_id'); // null / '' / 'All' => consolidated view
+        $shiftId   = $request->input('shift_id');
+
+        $summary = $this->buildSalesSummaryData($startDate, $endDate, $shiftId, $cashierId);
+
+        $filename = 'sales_summary_' . now()->format('Ymd_His') . '.xlsx';
+
+        return Excel::download(
+            new SalesSummaryExport(
+                $startDate ?? 'N/A',
+                $endDate   ?? 'N/A',
+                $summary['isConsolidated'],
+                $summary['cashierName'],
+                $summary['totalSales'],
+                $summary['plusDP'],
+                $summary['lessDP'],
+                $summary['totalAmountOfSales'],
+                $summary['lessExpenses'],
+                $summary['remainingCash'],
+                $summary['paymentBreakdown'],
             ),
             $filename
         );

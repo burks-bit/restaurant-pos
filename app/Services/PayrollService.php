@@ -92,6 +92,11 @@ class PayrollService
             'items.employee',
         ]);
 
+        $payroll->setRelation(
+            'items',
+            $payroll->items->sortBy(fn ($item) => $item->employee?->first_name)->values()
+        );
+
         return Inertia::render('Payrolls/PayrollDetail', [
             'payroll' => $payroll,
             'earning_types' => $earning_types,

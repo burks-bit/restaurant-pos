@@ -16,10 +16,20 @@ class ReservationController extends Controller
         $this->reservationService = $reservationService;
     }
 
-    public function index()
+    public function index(Request $request, ReservationService $reservationService)
     {
+        if (!$request->has('start_date') && !$request->has('end_date')) {
+            // first load, no query params at all → default to today for both
+            $startDate = now()->format('Y-m-d');
+            $endDate   = now()->format('Y-m-d');
+        } else {
+            // params present — could be real dates or '' for "show all"
+            $startDate = $request->query('start_date');
+            $endDate   = $request->query('end_date');
+        }
+
         try {
-            return $this->reservationService->index();
+            return $reservationService->index($startDate, $endDate);
         } catch (\Throwable $e) {
             Log::error('ReservationController@index failed: ' . $e->getMessage());
 

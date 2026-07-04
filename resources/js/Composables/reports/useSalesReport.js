@@ -121,21 +121,21 @@ export function useSalesReport() {
     window.open(url, '_blank')
   }
 
-  const generateSummaryPdfReport = () => {
+  const exportSalesSummary = () => {
     if (orders.value.length === 0) {
-      alert('No data to print.')
+      alert('No data to export.')
       return
     }
 
-    const url = route(`${prefix.value}.sales.print-sales-report-summary-pdf`, {
+    const url = route(`${prefix.value}.sales.export-sales-summary-report`, {
       start_date: startDate.value,
-      end_date: endDate.value,
-      status: selectedStatus.value,
+      end_date:   endDate.value,
+      status:     selectedStatus.value,
       cashier_id: selectedCashier.value,
-      shift_id: selectedShift.value
+      shift_id:   selectedShift.value,
     })
 
-    window.open(url, '_blank')
+    window.location.href = url   // triggers file download directly, same pattern as exportToExcel
   }
 
   const formatDate = (date) => {
@@ -180,7 +180,7 @@ export function useSalesReport() {
     totalReservationFees,
     fetchSalesReport,
     generatePdfReport,
-    generateSummaryPdfReport,
+    exportSalesSummary,
     formatDate,
     consumedAddons,
     totalMayaSales,

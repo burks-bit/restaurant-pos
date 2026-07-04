@@ -19,6 +19,20 @@
             </option>
           </select>
         </div>
+        
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">Cashier</label>
+          <select
+            v-model="form.cashier_employee_id"
+            required
+            class="w-full border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600"
+          >
+            <option value="" disabled>Select cashier...</option>
+            <option v-for="cashier in cashiersOnDuty" :key="cashier.employee_id" :value="cashier.employee_id">
+              {{ cashier.name }}
+            </option>
+          </select>
+        </div>
 
         <!-- Name -->
         <div>
@@ -140,7 +154,7 @@
     </div>
 
     <!-- Pax breakdown: full width, only when a pricing scheme is selected -->
-    <div v-if="form.pricing_scheme_id && form.pax_breakdown.length">
+    <div v-if="form.pricing_scheme_id && schemeFilteredBreakdown.length">
       <label class="block text-sm font-medium text-gray-700 mb-2">Pax per category</label>
       <div class="border rounded overflow-hidden">
         <table class="w-full text-sm">
@@ -153,7 +167,7 @@
             </tr>
           </thead>
           <tbody>
-            <tr v-for="(row, i) in form.pax_breakdown" :key="row.head_pricing_rule_id" class="border-t">
+            <tr v-for="(row, i) in schemeFilteredBreakdown" :key="row.head_pricing_rule_id" class="border-t">
               <td class="px-3 py-1.5">{{ row.label }}</td>
               <td class="px-3 py-1.5 text-right text-gray-600">
                 {{ row.price_snapshot > 0 ? formatCurrency(row.price_snapshot) : 'Free' }}
@@ -164,7 +178,7 @@
                   type="number"
                   min="0"
                   class="w-16 border border-gray-300 rounded px-2 py-1 text-center text-sm focus:outline-none focus:ring-1 focus:ring-blue-600"
-                  @input="$emit('qty-change', i)"
+                  @input="$emit('qty-change', form.pax_breakdown.indexOf(row))"
                 />
               </td>
               <td class="px-3 py-1.5 text-right font-medium">{{ formatCurrency(row.subtotal) }}</td>
@@ -210,6 +224,7 @@ const props = defineProps({
   pricingSchemes: { type: Array, default: () => [] },
   pricingRules: { type: Array, default: () => [] },
   shifts: { type: Array, default: () => [] },
+  cashiersOnDuty: { type: Array, default: () => [] },
   processing: { type: Boolean, default: false },
 })
 
@@ -232,4 +247,12 @@ const totalEstimated = computed(() =>
 )
 const formatCurrency = (v) =>
   Number(v ?? 0).toLocaleString('en-PH', { style: 'currency', currency: 'PHP' })
+
+const schemeFilteredBreakdown = computed(() => {
+  if (!props.form.pricing_scheme_id) return []
+  return props.form.pax_breakdown.filter((row) => {
+    const rule = props.pricingRules.find((r) => r.id === row.head_pricing_rule_id)
+    return rule && rule.pricing_scheme_id == props.form.pricing_scheme_id
+  })
+})
 </script>

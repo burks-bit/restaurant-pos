@@ -152,6 +152,16 @@ class ReportController extends Controller
         }
     }
 
+    public function exportSalesSummaryReport(Request $request)
+    {
+        try {
+            return $this->reportService->exportSalesSummaryReport($request);
+        } catch (\Throwable $e) {
+            Log::error('ReportController@exportSalesSummaryReport failed: ' . $e->getMessage());
+            return back()->with('error', 'Failed to print sales summary report.');
+        }
+    }
+
     public function exportInventoryReportExcel(Request $request)
     {
         try {

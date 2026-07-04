@@ -22,7 +22,17 @@
           </span>
         </div>
 
-        <div class="flex items-center gap-2">
+        <div class="flex items-center gap-3">
+          <div class="relative">
+            <i class="fa fa-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm"></i>
+            <input
+              v-model="searchQuery"
+              type="text"
+              placeholder="Search name or employee code..."
+              class="pl-9 pr-3 py-2 border rounded text-sm w-64 focus:outline-none focus:ring-2 focus:ring-blue-400"
+            />
+          </div>
+
           <button
             @click="printSelectedPayslips"
             :disabled="selectedIds.length === 0"
@@ -48,9 +58,6 @@
                 </div>
               </th>
               <th class="px-4 py-2 text-center">Days</th>
-              <!-- <th class="px-4 py-2 text-center">Hours</th> -->
-              <!-- <th class="px-4 py-2 text-center">Late</th> -->
-              <!-- <th class="px-4 py-2 text-center">Undertime</th> -->
               <th class="px-4 py-2 text-center">Overtime</th>
               <th class="px-4 py-2 text-center">Gross Pay</th>
               <th class="px-4 py-2 text-center">Net Pay</th>
@@ -61,7 +68,7 @@
 
           <tbody>
             <tr
-              v-for="emp in payrollItems"
+              v-for="emp in filteredPayrollItems"
               :key="emp.id"
               class="border-t hover:bg-gray-50"
             >
@@ -81,21 +88,18 @@
               </td>
 
               <td class="px-4 py-2 text-center">{{ emp.days }}</td>
-              <!-- <td class="px-4 py-2 text-center">{{ emp.hours }}</td> -->
-              <!-- <td class="px-4 py-2 text-center text-red-600">{{ emp.late }}</td> -->
-              <!-- <td class="px-4 py-2 text-center text-orange-600">{{ emp.undertime }}</td> -->
               <td class="px-4 py-2 text-center text-green-600">{{ emp.overtime_hours }}</td>
 
               <td class="px-4 py-2 text-center font-semibold">
-                ₱ {{ Number(emp.gross_pay).toFixed(2) }}
+                ₱ {{ formatCurrency(emp.gross_pay) }}
               </td>
 
               <td class="px-4 py-2 text-center font-semibold">
-                ₱ {{ Number(emp.net_pay).toFixed(2) }}
+                ₱ {{ formatCurrency(getNetPay(emp)) }}
               </td>
 
               <td class="px-4 py-2 text-center">
-                ₱ {{ Number(emp.total_deductions || 0).toFixed(2) }}
+                ₱ {{ formatCurrency(emp.total_deductions || 0) }}
               </td>
 
               <td class="px-4 py-2 text-center">
@@ -131,9 +135,9 @@
               </td>
             </tr>
 
-            <tr v-if="!payrollItems.length">
-              <td colspan="6" class="px-4 py-6 text-center text-gray-500">
-                No employees in this payroll.
+            <tr v-if="!filteredPayrollItems.length">
+              <td colspan="7" class="px-4 py-6 text-center text-gray-500">
+                No employees found.
               </td>
             </tr>
           </tbody>
@@ -141,13 +145,24 @@
           <tfoot class="bg-gray-100 font-bold sticky bottom-0">
             <tr>
               <td colspan="3" class="px-4 py-2 text-right">Grand Total</td>
-              <td class="px-4 py-2 text-center">₱ {{ grandTotalEarnings }}</td>
-              <td class="px-4 py-2 text-center">₱ {{ grandTotalDeductions }}</td>
+              <td class="px-4 py-2 text-center">₱ {{ formatCurrency(grandTotalEarnings) }}</td>
+              <td class="px-4 py-2 text-center">₱ {{ formatCurrency(grandTotalNetPay) }}</td>
+              <td class="px-4 py-2 text-center">₱ {{ formatCurrency(grandTotalDeductions) }}</td>
               <td></td>
             </tr>
           </tfoot>
         </table>
       </div>
+
+      <!-- Bottom summary -->
+      <!-- <div class="mt-4 flex justify-end">
+        <div class="bg-white shadow rounded-lg px-6 py-3 flex items-center gap-3">
+          <span class="text-sm font-bold text-gray-700 uppercase tracking-wide">
+            Total Deductions
+          </span>
+          <span class="text-lg font-bold text-red-600">₱ {{ formatCurrency(grandTotalDeductions) }}</span>
+        </div>
+      </div> -->
 
       <!-- ── Earnings Modal ─────────────────────────────────────────────────── -->
       <div
@@ -278,20 +293,6 @@
               </table>
             </div>
           </div>
-
-          <!-- Net Pay -->
-          <!-- <div class="border-t pt-3 flex justify-between items-center">
-            <span class="text-sm font-bold text-gray-700">Net Pay</span>
-            <span class="text-base font-bold text-blue-700">
-              ₱ {{ (Number(viewEarningsTotal || 0) - Number(viewDeductionsTotal || 0)).toFixed(2) }}
-            </span>
-          </div> -->
-
-          <!-- <div class="flex justify-end mt-4">
-            <button @click="closeViewDeductions" class="px-4 py-2 border rounded hover:bg-gray-100">
-              Close
-            </button>
-          </div> -->
         </div>
       </div>
 
@@ -311,11 +312,14 @@ const {
   earning_types,
   deduction_types,
 
-  payrollItems,
+  filteredPayrollItems,
+  searchQuery,
   isLoading,
   selectedIds,
   isAllSelected,
   toggleSelectAll,
+
+  getNetPay,
 
   showDeductionModal,
   deductionForm,
@@ -338,7 +342,9 @@ const {
 
   grandTotalEarnings,
   grandTotalDeductions,
+  grandTotalNetPay,
   formatDate,
+  formatCurrency,
   printSinglePayslip,
   printSelectedPayslips,
 } = usePayrollDetails(props.payroll)

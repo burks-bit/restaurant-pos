@@ -131,10 +131,10 @@
                     {{ emp.total_hours }}
                   </td>
                   <td class="border px-3 py-2 text-center text-red-600">
-                    {{ emp.total_late }}
+                    {{ formatMinutes(emp.total_late) }}
                   </td>
                   <td class="border px-3 py-2 text-center text-orange-600">
-                    {{ emp.total_undertime }}
+                    {{ formatMinutes(emp.total_undertime) }}
                   </td>
                   <td class="border px-3 py-2 text-center text-green-600">
                     {{ Number(emp.overtime_hours || 0).toFixed(2) }}
@@ -147,7 +147,7 @@
 
               <tfoot v-if="employees.length > 0" class="bg-gray-100">
                 <tr class="font-bold">
-                  <td colspan="6" class="border px-3 py-2 text-right">
+                  <td colspan="7" class="border px-3 py-2 text-right">
                     Grand Total
                   </td>
                   <td class="border px-3 py-2 text-center">
@@ -181,7 +181,20 @@ const {
   toggleEmployee,
   toggleAll,
 } = usePayrollGenerate()
+
+const formatMinutes = (minutes) => {
+  const total = Math.round(Number(minutes) || 0)
+  if (total <= 0) return '0m'
+
+  const hrs = Math.floor(total / 60)
+  const mins = total % 60
+
+  if (hrs > 0 && mins > 0) return `${hrs}h ${mins}m`
+  if (hrs > 0) return `${hrs}h`
+  return `${mins}m`
+}
 </script>
+
 
 <style>
 .custom-scroll::-webkit-scrollbar {

@@ -13,25 +13,46 @@
                         <p class="text-sm text-gray-500 mt-0.5">
                             {{ filteredLogs.length }} record{{ filteredLogs.length === 1 ? '' : 's' }} found
                             <span v-if="search"> for "{{ search }}"</span>
+                            <span v-if="dateFilter"> on {{ formatDateLabel(dateFilter) }}</span>
                         </p>
                     </div>
 
-                    <!-- Search Input -->
-                    <div class="relative w-full sm:w-72">
-                        <!-- <span class="fa fa-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm"></span> -->
-                        <input
-                            v-model="search"
-                            type="text"
-                            placeholder="Search name, code, or status..."
-                            class="w-full pl-9 pr-9 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                        />
-                        <!-- <button
-                            v-if="search"
-                            @click="search = ''"
-                            class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                        >
-                            <span class="fa fa-times text-sm"></span>
-                        </button> -->
+                    <div class="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
+                        <!-- Date Filter -->
+                        <div class="relative w-full sm:w-48">
+                            <span class="fa fa-calendar-day absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm pointer-events-none"></span>
+                            <input
+                                v-model="dateFilter"
+                                type="date"
+                                class="w-full pl-9 pr-9 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                            />
+                            <button
+                                v-if="dateFilter"
+                                @click="dateFilter = ''"
+                                class="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                                title="Clear date"
+                            >
+                                <span class="fa fa-times text-sm"></span>
+                            </button>
+                        </div>
+
+                        <!-- Search Input -->
+                        <div class="relative w-full sm:w-72">
+                            <span class="fa fa-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm pointer-events-none"></span>
+                            <input
+                                v-model="search"
+                                type="text"
+                                placeholder="Search name, code, or status..."
+                                class="w-full pl-9 pr-9 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                            />
+                            <button
+                                v-if="search"
+                                @click="search = ''"
+                                class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                            >
+                                <span class="fa fa-times text-sm"></span>
+                            </button>
+                        </div>
                     </div>
                 </div>
 
@@ -84,9 +105,15 @@
                                 </td>
 
                                 <!-- Schedule -->
-                                <td class="px-4 py-3 align-middle text-gray-600 whitespace-nowrap">
-                                    <span class="fa fa-clock text-gray-400 mr-1"></span>
-                                    {{ log.time_in ?? '—' }} <span class="text-gray-400">–</span> {{ log.time_out ?? '—' }}
+                                <td class="px-4 py-3 align-middle whitespace-nowrap">
+                                    <div class="text-gray-700 font-medium">
+                                        <span class="fa fa-calendar-alt text-gray-400 mr-1"></span>
+                                        {{ log.schedule_date ?? '—' }}
+                                    </div>
+                                    <div class="text-xs text-gray-500 mt-0.5">
+                                        <span class="fa fa-clock text-gray-400 mr-1"></span>
+                                        {{ log.time_in ?? '—' }} <span class="text-gray-400">–</span> {{ log.time_out ?? '—' }}
+                                    </div>
                                 </td>
 
                                 <!-- Clock In -->
@@ -145,7 +172,7 @@
                             <tr v-if="filteredLogs.length === 0">
                                 <td colspan="6" class="px-4 py-10 text-center text-gray-400">
                                     <span class="fa fa-inbox text-3xl mb-2 block text-gray-300"></span>
-                                    <template v-if="search">No logs match "{{ search }}".</template>
+                                    <template v-if="search || dateFilter">No logs match the current filters.</template>
                                     <template v-else>No attendance logs found.</template>
                                 </td>
                             </tr>
@@ -232,21 +259,32 @@
             </div>
         </div>
 
-        
+
     </AuthenticatedLayout>
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
-import { Link } from '@inertiajs/vue3'
+import { ref, watch, computed} from 'vue'
+import { Link, router } from '@inertiajs/vue3'
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue'
 
 const props = defineProps({
   logs: Array,
+  filters: Object, // { date: '2026-07-04' } from the controller
 })
 
-const logs = computed(() => props.logs ?? [])
 const search = ref('')
+const dateFilter = ref(props.filters?.date ?? '')
+
+// Push the date to the server instead of filtering client-side —
+// the service already handles schedule_date / shift_end_date matching in SQL.
+watch(dateFilter, (value) => {
+    router.get(route('hr.employees.daily-logs'), { date: value || undefined }, {
+        preserveState: true,
+        preserveScroll: true,
+        replace: true,
+    })
+})
 
 const statusBadge = (log) => {
     if (!log.actual_time_in) {
@@ -261,22 +299,27 @@ const statusBadge = (log) => {
     return { label: 'Present', class: 'bg-green-100 text-green-700', icon: 'fa-check-circle' }
 }
 
+// Now only handles the text search — logs arriving from props are already
+// date-filtered server-side.
 const filteredLogs = computed(() => {
     const term = search.value.trim().toLowerCase()
-    if (!term) return logs.value
+    if (!term) return props.logs ?? []
 
-    return logs.value.filter((log) => {
+    return (props.logs ?? []).filter((log) => {
         const fullName = `${log.first_name ?? ''} ${log.last_name ?? ''}`.toLowerCase()
         const code = (log.employee_code ?? '').toLowerCase()
         const status = statusBadge(log).label.toLowerCase()
 
-        return (
-            fullName.includes(term) ||
-            code.includes(term) ||
-            status.includes(term)
-        )
+        return fullName.includes(term) || code.includes(term) || status.includes(term)
     })
 })
+
+const formatDateLabel = (isoDate) => {
+    if (!isoDate) return ''
+    const [year, month, day] = isoDate.split('-').map(Number)
+    const d = new Date(year, month - 1, day)
+    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+}
 
 const initials = (log) => {
     const first = log.first_name?.charAt(0) ?? ''

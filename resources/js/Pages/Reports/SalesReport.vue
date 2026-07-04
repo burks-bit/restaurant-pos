@@ -115,14 +115,14 @@
             Export Excel
           </button>
           
-          <!-- <button
-            @click="generateSummaryPdfReport"
+          <button
+            @click="exportSalesSummary"
             :disabled="orders.length === 0"
             class="rounded bg-orange-600 px-4 py-2 text-sm text-white hover:bg-orange-700 disabled:opacity-50"
           >
-            <span class="fa fa-file-pdf mr-1"></span> 
-            Generate Summary
-          </button> -->
+            <span class="fa fa-file-excel mr-1"></span>
+            Export Summary
+          </button>
         </div>
 
         <div class="mb-7 grid grid-cols-1 gap-4 md:grid-cols-5">
@@ -364,7 +364,7 @@ const {
   totalReservationFees,
   fetchSalesReport,
   generatePdfReport,
-  generateSummaryPdfReport,
+  exportSalesSummary,
   formatDate,
   consumedAddons,
   totalMayaSales,

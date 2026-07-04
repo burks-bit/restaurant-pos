@@ -14,24 +14,68 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
 use App\Models\Shift;
+use App\Models\User;
+use App\Models\Employee;
+use App\Models\EmployeeSchedule;
 
 class ReservationService
 {
-    public function index()
+    public function index(?string $startDate = null, ?string $endDate = null)
     {
         try {
-            $reservations = Reservation::with([
+            $cashierEmployeeIds = Employee::where('access', 2)->pluck('id')->toArray();
+
+            // cashiers on duty still default to "today" if no range is set
+            $cashierDate = $startDate ?: now()->format('Y-m-d');
+
+            $cashiersOnDuty = Employee::whereIn('id', $cashierEmployeeIds)
+                ->whereHas('schedules', function ($query) use ($cashierDate) {
+                    $query->whereDate('schedule_date', $cashierDate);
+                })
+                ->with(['schedules' => function ($query) use ($cashierDate) {
+                    $query->whereDate('schedule_date', $cashierDate);
+                }])
+                ->get();
+
+            $mapped = $cashiersOnDuty->map(function ($employee) {
+                $schedule = $employee->schedules->first();
+
+                $shiftLabel = $schedule
+                    ? Carbon::parse($schedule->time_in)->format('g:iA') . '-' . Carbon::parse($schedule->time_out)->format('g:iA')
+                    : 'No Shift';
+
+                return [
+                    'employee_id' => $employee->id,
+                    'name'        => $employee->first_name . ' ' . $employee->last_name,
+                ];
+            });
+
+            $reservationsQuery = Reservation::with([
                     'reservationPax.headPricingRule',
                     'pricingScheme',
                 ])
-                ->orderBy('created_at', 'desc')
-                ->get();
+                ->orderBy('created_at', 'desc');
+
+            // apply range filter only if at least one bound was actually provided
+            if (!empty($startDate) && !empty($endDate)) {
+                $reservationsQuery->whereDate('created_at', '>=', $startDate)
+                                ->whereDate('created_at', '<=', $endDate);
+            } elseif (!empty($startDate)) {
+                $reservationsQuery->whereDate('created_at', '>=', $startDate);
+            } elseif (!empty($endDate)) {
+                $reservationsQuery->whereDate('created_at', '<=', $endDate);
+            }
+            // both empty → no filter, show all
+
+            $reservations = $reservationsQuery->get();
 
             return Inertia::render('Reservations/Index', [
                 'reservations'    => $reservations,
                 'pricing_schemes' => PricingScheme::where('is_active', true)->get(),
                 'pricing_rules'   => HeadPricingRule::where('is_active', true)->get(),
-                'shifts'   => Shift::get(),
+                'shifts'          => Shift::all(),
+                'cashiersOnDuty'  => $mapped,
+                'filters'         => ['start_date' => $startDate, 'end_date' => $endDate],
             ]);
         } catch (\Throwable $e) {
             Log::error('ReservationService@index failed: ' . $e->getMessage());
@@ -59,6 +103,7 @@ class ReservationService
             'pax_breakdown.*.subtotal'       => 'required|numeric|min:0',
             'pax'                    => 'required|integer|min:1',
             'shift_id'               => 'required|exists:shifts,id',
+            'cashier_employee_id'    => 'nullable|exists:employees,id',
         ]);
 
         DB::transaction(function () use ($data) {
@@ -132,11 +177,9 @@ class ReservationService
 
             })->first();
 
-            $cashierIdOnDuty = Order::getCashierIdOnDuty($now, $data['shift_id'] ?? null);
-
             // --- 4. Create Order ---
             $order = Order::create([
-                'user_id'          => $cashierIdOnDuty,
+                'user_id'          => $data['cashier_employee_id'],
                 'order_no'         => $orderNo,
                 'subtotal'         => $data['reservation_fee'],
                 'total_discount'   => 0,

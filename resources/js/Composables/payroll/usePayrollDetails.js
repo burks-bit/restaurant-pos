@@ -23,19 +23,48 @@ export function usePayrollDetails(payroll) {
     { immediate: true, deep: true }
   )
 
+  // ─── Search ────────────────────────────────────────────────────────────────
+
+  const searchQuery = ref('')
+
+  const filteredPayrollItems = computed(() => {
+    const query = searchQuery.value.trim().toLowerCase()
+    if (!query) return payrollItems.value
+
+    return payrollItems.value.filter((item) => {
+      const fullName = `${item.employee?.first_name || ''} ${item.employee?.last_name || ''}`.toLowerCase()
+      const code = (item.employee?.employee_code || '').toLowerCase()
+      return fullName.includes(query) || code.includes(query)
+    })
+  })
+
   const selectedIds = ref([])
 
   const isAllSelected = computed(() => {
-    const total = payrollItems.value.length
-    return total > 0 && selectedIds.value.length === total
+    const total = filteredPayrollItems.value.length
+    return total > 0 && selectedIds.value.every((id) =>
+      filteredPayrollItems.value.some((item) => item.id === id)
+    ) && filteredPayrollItems.value.every((item) => selectedIds.value.includes(item.id))
   })
 
   const toggleSelectAll = (event) => {
     if (event.target.checked) {
-      selectedIds.value = payrollItems.value.map((item) => item.id)
+      const ids = filteredPayrollItems.value.map((item) => item.id)
+      selectedIds.value = [...new Set([...selectedIds.value, ...ids])]
     } else {
-      selectedIds.value = []
+      const idsToRemove = new Set(filteredPayrollItems.value.map((item) => item.id))
+      selectedIds.value = selectedIds.value.filter((id) => !idsToRemove.has(id))
     }
+  }
+
+  // ─── Net Pay ───────────────────────────────────────────────────────────────
+  // Net pay is always derived client-side from gross pay minus total deductions,
+  // rather than trusting a possibly-stale emp.net_pay value from the server.
+
+  const getNetPay = (employee) => {
+    const gross = Number(employee.gross_pay || 0)
+    const deductions = Number(employee.total_deductions || 0)
+    return gross - deductions
   }
 
   // ─── Deductions ────────────────────────────────────────────────────────────
@@ -158,7 +187,7 @@ export function usePayrollDetails(payroll) {
       .toFixed(2)
   })
 
-  const viewEarningsTotal = computed(() => {       // ← add this too
+  const viewEarningsTotal = computed(() => {
     return viewDeductions.value.earnings
       .reduce((sum, e) => sum + Number(e.amount || 0), 0)
       .toFixed(2)
@@ -214,7 +243,6 @@ export function usePayrollDetails(payroll) {
   }
 
   const openEarningsModal = (employee) => {
-    console.log('Opening earnings modal for employee:', employee)
     const amounts = Object.fromEntries(
       earning_types.value.map((t) => [t.name, getEarningAmount(employee, t.name)])
     )
@@ -276,16 +304,24 @@ export function usePayrollDetails(payroll) {
   }
 
   // ─── Totals ────────────────────────────────────────────────────────────────
+  // Totals are computed off filteredPayrollItems so they reflect what's on screen
+  // when a search is active.
 
   const grandTotalEarnings = computed(() => {
-    return payrollItems.value
+    return filteredPayrollItems.value
       .reduce((sum, employee) => sum + Number(employee.gross_pay || 0), 0)
       .toFixed(2)
   })
 
   const grandTotalDeductions = computed(() => {
-    return payrollItems.value
+    return filteredPayrollItems.value
       .reduce((sum, employee) => sum + Number(employee.total_deductions || 0), 0)
+      .toFixed(2)
+  })
+
+  const grandTotalNetPay = computed(() => {
+    return filteredPayrollItems.value
+      .reduce((sum, employee) => sum + getNetPay(employee), 0)
       .toFixed(2)
   })
 
@@ -309,16 +345,27 @@ export function usePayrollDetails(payroll) {
     window.open(`${url}?${queryString}`, '_blank')
   }
 
+  const formatCurrency = (value) => {
+    return Number(value || 0).toLocaleString('en-US', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    })
+  }
+
   return {
     earning_types,
     deduction_types,
 
     payrollItems,
+    filteredPayrollItems,
+    searchQuery,
     isLoading,
 
     selectedIds,
     isAllSelected,
     toggleSelectAll,
+
+    getNetPay,
 
     showDeductionModal,
     deductionForm,
@@ -341,8 +388,10 @@ export function usePayrollDetails(payroll) {
 
     grandTotalEarnings,
     grandTotalDeductions,
+    grandTotalNetPay,
 
     formatDate,
+    formatCurrency,
     printSinglePayslip,
     printSelectedPayslips,
   }

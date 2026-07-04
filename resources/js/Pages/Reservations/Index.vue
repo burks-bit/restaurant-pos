@@ -4,7 +4,6 @@
       <div class="p-4 bg-gray-50 min-h-screen">
         <h1 class="text-2xl font-semibold mb-4 text-gray-900">Reservations</h1>
 
-        <!-- Toolbar -->
         <div class="flex justify-between mb-4 flex-wrap gap-2">
           <div class="flex gap-2 flex-wrap">
             <input
@@ -24,6 +23,24 @@
               <option value="completed">Completed</option>
               <option value="cancelled">Cancelled</option>
             </select>
+
+            <input
+              v-model="startDate"
+              type="date"
+              class="border rounded px-3 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600"
+            />
+            <span class="text-sm text-gray-500 self-center">to</span>
+            <input
+              v-model="endDate"
+              type="date"
+              class="border rounded px-3 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600"
+            />
+            <button
+              class="text-xs text-gray-500 hover:text-gray-700 px-2"
+              @click="clearDateFilter"
+            >
+              <i class="fa fa-times"></i> Reset to today
+            </button>
           </div>
           <button
             class="flex items-center gap-1 text-sm bg-blue-600 text-white px-3 py-1.5 rounded hover:bg-blue-700"
@@ -33,18 +50,14 @@
           </button>
         </div>
 
-        <!-- Table -->
         <div class="bg-white rounded-lg shadow overflow-auto max-h-[65vh]">
           <table class="min-w-full table-auto border-collapse text-sm">
             <thead class="sticky top-0 bg-gray-100 z-10 text-gray-800 text-left">
               <tr>
                 <th class="px-3 py-2 border">Name</th>
-                <th class="px-3 py-2 border">Entry Datetime</th>
-                <th class="px-3 py-2 border">Scheme</th>
-                <th class="px-3 py-2 border">Pax breakdown</th>
+                <th class="px-3 py-2 border">Datetime Encoded</th>
                 <th class="px-3 py-2 border">Schedule</th>
                 <th class="px-3 py-2 border">Contact</th>
-                <th class="px-3 py-2 border">Res. fee</th>
                 <th class="px-3 py-2 border">Status</th>
                 <th class="px-3 py-2 border">Actions</th>
               </tr>
@@ -55,24 +68,10 @@
                 :key="r.id"
                 class="hover:bg-gray-50"
               >
-                <td class="px-3 py-1 border font-medium">{{ r.name }}</td>
+                <td class="px-3 py-1 border font-medium uppercase">{{ r.name }}</td>
                 <td class="px-3 py-1 border">{{ formatDateTime(r.created_at) }}</td>
-                <td class="px-3 py-1 border text-gray-600">{{ r.pricing_scheme?.name ?? '-' }}</td>
-                <td class="px-3 py-1 border">
-                  <div v-if="r.reservation_pax?.length" class="flex flex-col gap-0.5">
-                    <span
-                      v-for="p in r.reservation_pax.filter(x => x.qty > 0)"
-                      :key="p.id"
-                      class="text-xs text-gray-700"
-                    >
-                      {{ p.head_pricing_rule?.label }}: {{ p.qty }}
-                    </span>
-                  </div>
-                  <span v-else class="text-gray-400">{{ r.pax }} pax</span>
-                </td>
                 <td class="px-3 py-1 border">{{ formatDateTime(r.reservation_datetime) }}</td>
                 <td class="px-3 py-1 border">{{ r.contact_number ?? '-' }}</td>
-                <td class="px-3 py-1 border">{{ formatCurrency(r.reservation_fee) }}</td>
                 <td class="px-3 py-1 border">
                   <span class="px-2 py-0.5 rounded text-xs font-medium" :class="statusClass(r.status)">
                     {{ r.status }}
@@ -80,7 +79,13 @@
                 </td>
                 <td class="px-3 py-1 border">
                   <div class="flex gap-1 flex-wrap">
-                    <!-- Arrival — only for pending/confirmed -->
+                    <button
+                      class="flex items-center gap-1 px-1.5 py-0.5 text-xs bg-orange-600 text-white rounded hover:bg-orange-700"
+                      @click="openViewModal(r)"
+                    >
+                      <i class="fa fa-eye"></i> View
+                    </button>
+
                     <button
                       v-if="['pending','confirmed'].includes(r.status)"
                       class="flex items-center gap-1 px-1.5 py-0.5 text-xs bg-green-600 text-white rounded hover:bg-green-700"
@@ -94,23 +99,16 @@
                     >
                       <i class="fa fa-edit"></i> Edit
                     </button>
-                    <button
-                      class="flex items-center gap-1 px-1.5 py-0.5 text-xs bg-red-600 text-white rounded hover:bg-red-700"
-                      @click="deleteReservation(r)"
-                    >
-                      <i class="fa fa-trash"></i> Delete
-                    </button>
                   </div>
                 </td>
               </tr>
               <tr v-if="filteredReservations.length === 0">
-                <td colspan="8" class="text-center py-8 text-gray-400">No reservations found</td>
+                <td colspan="6" class="text-center py-8 text-gray-400">No reservations found</td>
               </tr>
             </tbody>
           </table>
         </div>
 
-        <!-- ── Add Modal ───────────────────────────────────────────────────── -->
         <Teleport to="body">
           <div
             v-if="showAddModal"
@@ -126,6 +124,7 @@
                 :pricing-rules="pricingRules"
                 :processing="processing"
                 :shifts="shifts"
+                :cashiersOnDuty="cashiersOnDuty"
                 @submit="saveReservation"
                 @cancel="showAddModal = false"
                 @qty-change="(i) => onQtyChange(newForm.pax_breakdown, i)"
@@ -135,7 +134,6 @@
           </div>
         </Teleport>
 
-        <!-- ── Edit Modal ──────────────────────────────────────────────────── -->
         <Teleport to="body">
           <div
             v-if="showEditModal"
@@ -157,7 +155,6 @@
           </div>
         </Teleport>
 
-        <!-- ── Arrival / Table Assignment Modal ───────────────────────────── -->
         <Teleport to="body">
           <div
             v-if="showArrivalModal"
@@ -203,14 +200,114 @@
           </div>
         </Teleport>
 
+        <Teleport to="body">
+          <div
+            v-if="showViewModal"
+            class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+          >
+            <div class="bg-white rounded-lg w-full max-w-2xl p-6 max-h-[90vh] overflow-y-auto">
+              <div class="flex justify-between items-center mb-4">
+                <h2 class="text-lg font-semibold text-gray-900 flex items-center gap-2">
+                  <i class="fa fa-eye"></i> Reservation Details
+                </h2>
+                <button class="text-gray-400 hover:text-gray-600" @click="showViewModal = false">
+                  <i class="fa fa-times"></i>
+                </button>
+              </div>
+
+              <div v-if="viewingReservation" class="grid grid-cols-2 gap-4 text-sm">
+                <div>
+                  <p class="text-gray-500">Name</p>
+                  <p class="font-medium text-gray-900">{{ viewingReservation.name }}</p>
+                </div>
+                <div>
+                  <p class="text-gray-500">Status</p>
+                  <span class="px-2 py-0.5 rounded text-xs font-medium" :class="statusClass(viewingReservation.status)">
+                    {{ viewingReservation.status }}
+                  </span>
+                </div>
+                <div>
+                  <p class="text-gray-500">Contact Number</p>
+                  <p class="font-medium text-gray-900">{{ viewingReservation.contact_number ?? '-' }}</p>
+                </div>
+                <div>
+                  <p class="text-gray-500">Pax</p>
+                  <p class="font-medium text-gray-900">{{ viewingReservation.pax }}</p>
+                </div>
+                <div>
+                  <p class="text-gray-500">Pricing Scheme</p>
+                  <p class="font-medium text-gray-900">{{ viewingReservation.pricing_scheme?.name ?? '-' }}</p>
+                </div>
+                <div>
+                  <p class="text-gray-500">Reservation Fee</p>
+                  <p class="font-medium text-gray-900">{{ formatCurrency(viewingReservation.reservation_fee) }}</p>
+                </div>
+                <div>
+                  <p class="text-gray-500">Fee Payment Method</p>
+                  <p class="font-medium text-gray-900">{{ viewingReservation.fee_payment_method ?? '-' }}</p>
+                </div>
+                <div>
+                  <p class="text-gray-500">Fee Reference No.</p>
+                  <p class="font-medium text-gray-900">{{ viewingReservation.fee_reference_no ?? '-' }}</p>
+                </div>
+                <div>
+                  <p class="text-gray-500">Encoded At</p>
+                  <p class="font-medium text-gray-900">{{ formatDateTime(viewingReservation.created_at) }}</p>
+                </div>
+                <div>
+                  <p class="text-gray-500">Scheduled Datetime</p>
+                  <p class="font-medium text-gray-900">{{ formatDateTime(viewingReservation.reservation_datetime) }}</p>
+                </div>
+                <div>
+                  <p class="text-gray-500">Table Session ID</p>
+                  <p class="font-medium text-gray-900">{{ viewingReservation.table_session_id ?? '-' }}</p>
+                </div>
+                <div>
+                  <p class="text-gray-500">Shift</p>
+                  <p class="font-medium text-gray-900">{{ viewingReservation.shift_id ?? '-' }}</p>
+                </div>
+                <div class="col-span-2">
+                  <p class="text-gray-500">Remarks</p>
+                  <p class="font-medium text-gray-900">{{ viewingReservation.remarks ?? '-' }}</p>
+                </div>
+
+                <div class="col-span-2">
+                  <p class="text-gray-500 mb-1">Pax Breakdown</p>
+                  <div v-if="viewingReservation.reservation_pax?.length" class="border rounded divide-y">
+                    <div
+                      v-for="p in viewingReservation.reservation_pax.filter(x => x.qty > 0)"
+                      :key="p.id"
+                      class="flex justify-between px-3 py-1.5"
+                    >
+                      <span class="text-gray-700">{{ p.head_pricing_rule?.label ?? '-' }}</span>
+                      <span class="text-gray-600">Qty: {{ p.qty }}</span>
+                      <span class="text-gray-600">{{ formatCurrency(p.price_snapshot) }} ea</span>
+                      <span class="font-medium text-gray-900">{{ formatCurrency(p.subtotal) }}</span>
+                    </div>
+                  </div>
+                  <p v-else class="text-gray-400">No breakdown — {{ viewingReservation.pax }} pax</p>
+                </div>
+              </div>
+
+              <div class="flex justify-end mt-6">
+                <button
+                  class="px-4 py-2 bg-gray-200 rounded hover:bg-gray-300 text-sm"
+                  @click="showViewModal = false"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        </Teleport>
       </div>
     </div>
   </AuthenticatedLayout>
 </template>
 
 <script setup>
-import { computed } from 'vue'
-import { usePage } from '@inertiajs/vue3'
+import { computed, ref, watch } from 'vue'
+import { router, usePage } from '@inertiajs/vue3'
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue'
 import ReservationForm from './ReservationForm.vue'
 import { useReservations } from '@/Composables/reservations/useReservations'
@@ -221,8 +318,42 @@ const pricingSchemes = computed(() => page.props.pricing_schemes ?? [])
 const pricingRules = computed(() => page.props.pricing_rules ?? [])
 const availableTables = computed(() => page.props.available_tables ?? [])
 const shifts = computed(() => page.props.shifts ?? [])
+const cashiersOnDuty = computed(() => page.props.cashiersOnDuty ?? [])
 
-console.log(shifts.value)
+function todayLocalDate() {
+  const d = new Date()
+  const year = d.getFullYear()
+  const month = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+const startDate = ref(page.props.filters?.start_date ?? todayLocalDate())
+const endDate = ref(page.props.filters?.end_date ?? todayLocalDate())
+
+function clearDateFilter() {
+  startDate.value = todayLocalDate()
+  endDate.value = todayLocalDate()
+}
+
+function fetchReservations() {
+  router.get(route('frontdoor.reservations.index'),
+    { start_date: startDate.value ?? '', end_date: endDate.value ?? '' },
+    { preserveState: true, preserveScroll: true, replace: true }
+  )
+}
+
+watch(startDate, fetchReservations)
+watch(endDate, fetchReservations)
+
+const showViewModal = ref(false)
+const viewingReservation = ref(null)
+
+function openViewModal(reservation) {
+  viewingReservation.value = reservation
+  showViewModal.value = true
+}
+
 const {
   search, statusFilter, processing,
   showAddModal, showEditModal, showArrivalModal,
@@ -234,7 +365,6 @@ const {
   formatDateTime, statusClass, formatCurrency,
 } = useReservations(reservations)
 
-// When the pricing scheme changes, re-filter rules to that scheme
 const onSchemeChange = (form, schemeId) => {
   form.pricing_scheme_id = schemeId
   const rules = pricingRules.value.filter((r) => r.pricing_scheme_id == schemeId)
@@ -244,7 +374,7 @@ const onSchemeChange = (form, schemeId) => {
     qty: 0,
     price_snapshot: parseFloat(rule.price ?? 0),
     subtotal: 0,
-    shift_id: null, // Initialize shift_id to null
+    shift_id: null,
   }))
 }
 </script>

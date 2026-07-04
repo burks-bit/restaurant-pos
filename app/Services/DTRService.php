@@ -189,22 +189,68 @@ class DTRService
         ]);
     }
 
-    public function getAllEmployeeDailyLogs()
-    {
-        $today = Carbon::now()->toDateString();
+    // public function getAllEmployeeDailyLogs()
+    // {
+    //     $today = Carbon::now()->toDateString();
 
-        $logs = DB::table('employees as emp')
-            ->leftJoin('employee_schedules as emps', 'emps.employee_id', '=', 'emp.id')
-            ->whereDate('emps.schedule_date', $today)
-            ->where(function ($query) {
-                $query->where('emps.status', '!=', 'Day Off')
-                    ->where('emps.status', '!=', 'Absent')
-                    ->where('emps.status', '!=', 'Leave');
+    //     $logs = DB::table('employees as emp')
+    //         ->leftJoin('employee_schedules as emps', 'emps.employee_id', '=', 'emp.id')
+    //         ->whereDate('emps.schedule_date', $today)
+    //         ->where(function ($query) {
+    //             $query->where('emps.status', '!=', 'Day Off')
+    //                 ->where('emps.status', '!=', 'Absent')
+    //                 ->where('emps.status', '!=', 'Leave');
+    //         })
+    //         ->get();
+
+    //     return Inertia::render('Employees/Logs', [
+    //         'logs' => $logs
+    //     ]);
+    // }
+    
+    public function getAllEmployeeDailyLogs(?string $date = null)
+    {
+        $date = $date ?: Carbon::now()->toDateString();
+        Log::info('Fetching employee daily logs for date: ' . $date);
+
+        $logs = DB::table('employee_schedules as es')
+            ->join('employees as e', 'e.id', '=', 'es.employee_id')
+            ->select([
+                'es.id',
+                'es.employee_id',
+                'e.employee_code',
+                'e.first_name',
+                'e.last_name',
+                'es.time_in',
+                'es.time_out',
+                'es.actual_time_in',
+                'es.actual_time_out',
+                'es.time_in_photo',
+                'es.time_out_photo',
+                'es.schedule_date',
+                'es.shift_end_date',
+            ])
+            ->when($date, function ($query) use ($date) {
+                // Overnight shifts can end the next calendar day, so a log
+                // "belongs" to $date if either schedule_date or shift_end_date matches.
+                $query->where(function ($q) use ($date) {
+                    $q->whereDate('es.schedule_date', $date)
+                      ->orWhereDate('es.shift_end_date', $date);
+                });
             })
+            ->where(function ($query) {
+                $query->where('es.status', '!=', 'Day Off')
+                    ->where('es.status', '!=', 'Absent')
+                    ->where('es.status', '!=', 'Leave');
+            })
+            ->orderByDesc('es.actual_time_in')
             ->get();
 
         return Inertia::render('Employees/Logs', [
-            'logs' => $logs
+            'logs' => $logs,
+            'filters' => [
+                'date' => $date,
+            ],
         ]);
     }
 
@@ -309,6 +355,7 @@ class DTRService
                 });
             }
         )
+        ->where('status', 'active') // Only include active employees
         ->get();
 
         $payrollData = [];
@@ -348,10 +395,20 @@ class DTRService
                 $shiftEnd   = $shiftEndDate->copy()->setTimeFromTimeString($schedule->time_out);
 
                 // Anchor actual time in/out — actual_time_out date = shift_end_date if crosses midnight
-                $timeIn  = Carbon::parse($schedule->actual_time_in);
-                $timeOut = Carbon::parse($schedule->actual_time_out);
+                // $timeIn  = Carbon::parse($schedule->actual_time_in);
+                // $timeOut = Carbon::parse($schedule->actual_time_out);
 
-                // If actual times are stored as plain H:i (no date), anchor them properly
+                // Anchor actual_time_in to the schedule date (not today's date)
+                $timeIn = $scheduleDate->copy()->setTimeFromTimeString(
+                    Carbon::parse($schedule->actual_time_in)->format('H:i:s')
+                );
+
+                // Anchor actual_time_out to shift_end_date (handles overnight shifts)
+                $timeOut = $shiftEndDate->copy()->setTimeFromTimeString(
+                    Carbon::parse($schedule->actual_time_out)->format('H:i:s')
+                );
+
+                // Safety net: if time_out still ends up before/equal time_in, it crossed midnight unexpectedly
                 if ($timeOut->lte($timeIn)) {
                     $timeOut->addDay();
                 }

@@ -38,9 +38,13 @@ const allSelected = computed(() =>
 )
 
 // Update grandTotal to only sum selected
+// const grandTotal = computed(() => {
+//   return employees.value
+//     .reduce((sum, e) => sum + Number(e.total_earnings || 0), 0)
+//     .toFixed(2)
+// })
 const grandTotal = computed(() => {
   return employees.value
-    .filter(e => selectedEmployeeIds.value.includes(e.id))
     .reduce((sum, e) => sum + Number(e.total_earnings || 0), 0)
     .toFixed(2)
 })
@@ -69,6 +73,7 @@ const grandTotal = computed(() => {
       })
 
       employees.value = data ?? []
+      console.log('Fetched employees:', employees.value)
       selectedEmployeeIds.value = [] 
     } catch (error) {
       console.error(error)
