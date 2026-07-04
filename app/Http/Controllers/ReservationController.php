@@ -60,12 +60,14 @@ class ReservationController extends Controller
         }
     }
 
-    public function destroy($id)
+    public function destroy(Reservation $reservation)
     {
         try {
-            return $this->reservationService->destroy($id);
+            return $this->reservationService->destroy($reservation);
         } catch (\Throwable $e) {
-            Log::error('ReservationController@destroy failed: ' . $e->getMessage());
+            Log::error('ReservationController@destroy failed: ' . $e->getMessage(), [
+                'reservation_id' => $reservation->id ?? null,
+            ]);
 
             return back()->with('error', 'Failed to delete reservation.');
         }

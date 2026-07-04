@@ -281,9 +281,96 @@ class ReservationService
 
     public function destroy(Reservation $reservation)
     {
-        $reservation->delete();
-        return redirect()->back()->with('success', 'Reservation deleted.');
+        try {
+            DB::transaction(function () use ($reservation) {
+                // ── Log the reservation details found ────────────────────────────
+                Log::info('ReservationController@destroy: Reservation found', [
+                    'reservation_id'   => $reservation->id,
+                    'reservation_no'   => $reservation->reservation_no ?? null,
+                    'customer_name'    => $reservation->customer_name ?? null,
+                    'pax'              => $reservation->pax ?? null,
+                    'status'           => $reservation->status ?? null,
+                    'reservation_date' => $reservation->reservation_date ?? null,
+                ]);
+
+                // Find all orders tied to this reservation (deposit order + any dine-in
+                // settlement orders created when the table was assigned)
+                $orders = Order::where('reservation_id', $reservation->id)->get();
+
+                Log::info('ReservationController@destroy: Orders found for reservation', [
+                    'reservation_id' => $reservation->id,
+                    'order_count'    => $orders->count(),
+                    'order_ids'      => $orders->pluck('id')->toArray(),
+                    'order_numbers'  => $orders->pluck('order_no')->toArray(),
+                ]);
+
+                if ($orders->isNotEmpty()) {
+                    $orderIds = $orders->pluck('id');
+
+                    // ── Log the order_payments found before deleting ─────────────
+                    $payments = DB::table('order_payments')
+                        ->whereIn('order_id', $orderIds)
+                        ->get();
+
+                    Log::info('ReservationController@destroy: Order payments found', [
+                        'reservation_id' => $reservation->id,
+                        'payment_count'  => $payments->count(),
+                        'payment_ids'    => $payments->pluck('id')->toArray(),
+                        'payments_detail' => $payments->map(fn($p) => [
+                            'id'               => $p->id,
+                            'order_id'         => $p->order_id,
+                            'payment_method_id' => $p->payment_method_id,
+                            'amount'           => $p->amount,
+                            'remarks'          => $p->remarks,
+                        ])->toArray(),
+                    ]);
+
+                    // Delete child payment rows first (FK constraint safety)
+                    $deletedPaymentsCount = DB::table('order_payments')
+                        ->whereIn('order_id', $orderIds)
+                        ->delete();
+
+                    Log::info('ReservationController@destroy: Order payments deleted', [
+                        'reservation_id'        => $reservation->id,
+                        'deleted_payments_count' => $deletedPaymentsCount,
+                    ]);
+
+                    // Delete the orders themselves
+                    $deletedOrdersCount = Order::whereIn('id', $orderIds)->delete();
+
+                    Log::info('ReservationController@destroy: Orders deleted', [
+                        'reservation_id'      => $reservation->id,
+                        'deleted_orders_count' => $deletedOrdersCount,
+                        'deleted_order_ids'   => $orderIds->toArray(),
+                    ]);
+                } else {
+                    Log::info('ReservationController@destroy: No orders found for reservation, skipping payment/order deletion', [
+                        'reservation_id' => $reservation->id,
+                    ]);
+                }
+
+                $reservation->delete();
+
+                Log::info('ReservationController@destroy: Reservation deleted', [
+                    'reservation_id' => $reservation->id,
+                ]);
+            });
+
+            return redirect()->back()->with('success', 'Reservation and related orders deleted.');
+        } catch (\Throwable $e) {
+            Log::error('ReservationController@destroy failed: ' . $e->getMessage(), [
+                'reservation_id' => $reservation->id ?? null,
+                'trace'          => $e->getTraceAsString(),
+            ]);
+            return redirect()->back()->with('error', 'Failed to delete reservation.');
+        }
     }
+
+    // public function destroy(Reservation $reservation)
+    // {
+    //     $reservation->delete();
+    //     return redirect()->back()->with('success', 'Reservation deleted.');
+    // }
 
     
 }

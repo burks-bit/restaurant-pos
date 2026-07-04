@@ -99,6 +99,15 @@
                     >
                       <i class="fa fa-edit"></i> Edit
                     </button>
+
+                    <button
+                      v-if="is_allowed_to_void_rsvp && ['pending','confirmed'].includes(r.status)"
+                      class="flex items-center gap-1 px-1.5 py-0.5 text-xs bg-red-600 text-white rounded hover:bg-red-700"
+                      @click="deleteReservation(r)"
+                    >
+                      <i class="fa fa-trash"></i> Delete
+                    </button>
+                    
                   </div>
                 </td>
               </tr>
@@ -313,6 +322,7 @@ import ReservationForm from './ReservationForm.vue'
 import { useReservations } from '@/Composables/reservations/useReservations'
 
 const page = usePage()
+const is_allowed_to_void_rsvp = computed(() => page.props.auth.user?.void_rsvp ?? false)
 const reservations = computed(() => page.props.reservations ?? [])
 const pricingSchemes = computed(() => page.props.pricing_schemes ?? [])
 const pricingRules = computed(() => page.props.pricing_rules ?? [])

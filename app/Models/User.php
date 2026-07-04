@@ -55,6 +55,7 @@ class User extends Authenticatable
         'role',
         'employee_id',
         'branch_id',
+        'void_rsvp',
     ];
 
     protected $hidden = [
