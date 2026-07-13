@@ -134,6 +134,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
         Route::get('/employees/{employee}/dtr', [EmployeeController::class, 'showDTR'])->name('employees.dtr');
         Route::post('/employees/{employee}/dtr', [EmployeeController::class, 'updateDTR'])->name('employees.dtr.update');
+        Route::post('/employees/{employee}/dtr', [EmployeeController::class, 'fetchDTR'])->name('employees.dtr.fetch');
 
         Route::get('/employees/{employee}/payroll/attendance-pdf', [EmployeeController::class, 'generateEmployeePayrollPdf'])->name('employees.payroll.attendance.pdf');
     };

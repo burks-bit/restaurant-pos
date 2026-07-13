@@ -334,6 +334,25 @@ class OrderService
                 ]);
             }
 
+            $entry_type = $this->resolveSalesLedgerEntryType(
+                $request->reservation_id,
+                $request->table_session_id,
+                $request->reservation_fee_used
+            );
+
+            $sales_ledger_entry = SalesLedger::create([
+                'order_id' => $order->id,
+                'order_payment_id' => $createdOP->id ?? null,
+                'reservation_id' => $request->reservation_id ?? null,
+                'user_id' => auth()->id(),
+                'shift_id' => $request->shift_id ?? ($current_shift ? $current_shift->id : null),
+                'payment_method_id' => $methodId, // optional, can be set to the primary payment method if needed
+                'entry_type' => $entry_type,
+                'amount' => $total,
+                'business_date' => $order->created_at->toDateString(),
+                'remarks' => 'Order completed',
+            ]);
+
 
             if (($request->reservation_fee_used ?? 0) > 0) {
                 $reservationFeeMethod = PaymentMethod::where('code', 'reservation_fee')->first();

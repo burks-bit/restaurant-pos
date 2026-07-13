@@ -238,18 +238,25 @@
         </div>
 
         <div class="max-h-[55vh] overflow-auto rounded-lg bg-white shadow">
-          <table class="min-w-full table-auto border-collapse text-sm">
+          <table class="min-w-max table-auto border-collapse text-sm">
             <thead class="sticky top-0 z-10 bg-gray-100">
               <tr class="text-left font-semibold">
-                <th class="border px-2 py-2">Date</th>
+                <th class="border px-2 py-2 sticky left-0 bg-gray-100 z-20">Date</th>
                 <th class="border px-2 py-2">Cashier</th>
                 <th class="border px-2 py-2">Table #</th>
                 <th class="border px-2 py-2">Customer Name</th>
                 <th class="border px-2 py-2">No. of Pax</th>
                 <th class="border px-2 py-2">Amount</th>
-                <th class="border px-2 py-2">GCash</th>
-                <th class="border px-2 py-2">Cash</th>
-                <th class="border px-2 py-2">Maya</th>   <!-- ← add -->
+
+                <!-- Dynamic payment method columns — no hardcoded GCash/Cash/Maya -->
+                <th
+                  v-for="methodName in paymentMethodColumns"
+                  :key="methodName"
+                  class="border px-2 py-2 whitespace-nowrap"
+                >
+                  {{ methodName }}
+                </th>
+
                 <th class="border px-2 py-2">Total Gross Sales</th>
                 <th class="border px-2 py-2">Less Discount</th>
                 <th class="border px-2 py-2">Total Net Sales</th>
@@ -270,71 +277,65 @@
                 ]">
 
                 <!-- DATE -->
-                <td class="border px-2 py-2">{{ formatDate(order.created_at) }}</td>
+                <td class="border px-2 py-2 sticky left-0 bg-white whitespace-nowrap">{{ formatDate(order.created_at) }}</td>
 
                 <!-- CASHIER -->
-                <td class="border px-2 py-2">{{ order.cashier?.name || order.user?.name || '-' }}</td>
+                <td class="border px-2 py-2 whitespace-nowrap">{{ order.cashier?.name || order.user?.name || '-' }}</td>
 
                 <!-- TABLE # / TYPE LABEL -->
                 <template v-if="isReservationOrder(order)">
-                  <td class="border px-2 py-2 font-semibold bg-blue-50" colspan="3">
+                  <td class="border px-2 py-2 font-semibold bg-blue-50 whitespace-nowrap" colspan="3">
                     <p class="bg-blue-100 rounded text-blue-500 px-2 py-0.5 inline-block">Reservation Fee</p>
                     <p><small class="text-gray-500">({{ order.order_no || 'N/A' }})</small></p>
                   </td>
                 </template>
                 <template v-else-if="isSingleOrder(order)">
-                  <td class="border px-2 py-2 font-semibold bg-yellow-100" colspan="3">
+                  <td class="border px-2 py-2 font-semibold bg-yellow-100 whitespace-nowrap" colspan="3">
                     <p class="bg-yellow-200 rounded text-orange-400 px-2 py-0.5 inline-block">Single Order</p>
                   </td>
                 </template>
                 <template v-else>
                   <!-- TABLE -->
-                  <td class="border px-2 py-2">
+                  <td class="border px-2 py-2 whitespace-nowrap">
                     {{ order.table_session?.table?.name || order.table_number || 'N/A' }}
                   </td>
 
                   <!-- CUSTOMER NAME -->
-                  <td class="border px-2 py-2">{{ order.table_session?.customer_name || '-' }}</td>
+                  <td class="border px-2 py-2 whitespace-nowrap">{{ order.table_session?.customer_name || '-' }}</td>
 
                   <!-- NO. OF PAX -->
-                  <td class="border px-2 py-2">{{ order.table_session?.pax || '-' }}</td>
+                  <td class="border px-2 py-2 whitespace-nowrap">{{ order.table_session?.pax || '-' }}</td>
                 </template>
 
                 <!-- AMOUNT -->
-                <td class="border px-2 py-2">₱{{ Number(order.subtotal || 0).toFixed(2) }}</td>
+                <td class="border px-2 py-2 whitespace-nowrap">₱{{ Number(order.subtotal || 0).toFixed(2) }}</td>
 
-                <!-- GCASH PAYMENT -->
-                <td class="border px-2 py-2">
-                  ₱{{ Number(order.payments?.filter(p => p.payment_method?.code === 'gcash').reduce((s, p) => s + Number(p.amount || 0), 0)).toFixed(2) }}
-                </td>
-
-                <!-- CASH PAYMENT -->
-                <td class="border px-2 py-2">
-                  ₱{{ Number(order.payments?.filter(p => p.payment_method?.code === 'cash').reduce((s, p) => s + Number(p.amount || 0), 0)).toFixed(2) }}
-                </td>
-
-                <!-- MAYA PAYMENT -->                                              <!-- ← add -->
-                <td class="border px-2 py-2">
-                  ₱{{ Number(order.payments?.filter(p => p.payment_method?.code === 'maya').reduce((s, p) => s + Number(p.amount || 0), 0)).toFixed(2) }}
+                <!-- DYNAMIC PAYMENT METHOD CELLS -->
+                <td
+                  v-for="methodName in paymentMethodColumns"
+                  :key="methodName"
+                  class="border px-2 py-2 whitespace-nowrap"
+                >
+                  ₱{{ getOrderPaymentAmount(order, methodName).toFixed(2) }}
                 </td>
 
                 <!-- TOTAL GROSS SALES -->
-                <td class="border px-2 py-2">₱{{ Number(order.subtotal || 0).toFixed(2) }}</td>
+                <td class="border px-2 py-2 whitespace-nowrap">₱{{ Number(order.subtotal || 0).toFixed(2) }}</td>
 
                 <!-- LESS DISCOUNT -->
-                <td class="border px-2 py-2 text-green-600">₱{{ Number(order.total_discount || 0).toFixed(2) }}</td>
+                <td class="border px-2 py-2 text-green-600 whitespace-nowrap">₱{{ Number(order.total_discount || 0).toFixed(2) }}</td>
 
                 <!-- TOTAL NET SALES -->
-                <td class="border px-2 py-2 font-semibold">₱{{ Number(order.total || 0).toFixed(2) }}</td>
+                <td class="border px-2 py-2 font-semibold whitespace-nowrap">₱{{ Number(order.total || 0).toFixed(2) }}</td>
               </tr>
 
-              <!-- remove the duplicate, keep only one -->
               <tr v-if="orders.length === 0">
-                <td colspan="12" class="py-6 text-center text-gray-400">No sales records found</td>
+                <td :colspan="6 + paymentMethodColumns.length + 3" class="py-6 text-center text-gray-400">No sales records found</td>
               </tr>
             </tbody>
           </table>
         </div>
+
       </div>
     </div>
   </AuthenticatedLayout>
@@ -370,7 +371,9 @@ const {
   totalMayaSales,
   paymentBreakdown,
   exportToExcel,
-  payments
+  payments,
+  paymentMethodColumns,
+  getOrderPaymentAmount
 } = useSalesReport()
 
 const isReservationOrder = (order) => {
@@ -380,6 +383,4 @@ const isReservationOrder = (order) => {
 const isSingleOrder = (order) => {
   return !order.table_session && !order.table_number && !isReservationOrder(order)
 }
-
-console.log(orders.value)
 </script>

@@ -656,6 +656,7 @@
                       <th class="px-4 py-3 text-center">Scheduled Out</th>
                       <th class="px-4 py-3 text-center">Actual In</th>
                       <th class="px-4 py-3 text-center">Actual Out</th>
+                      <th class="px-4 py-3 text-center">Shift End Date</th>
                       <th class="px-4 py-3 text-center">Late</th>
                       <th class="px-4 py-3 text-center">Undertime</th>
                       <th class="px-4 py-3 text-center">Overtime</th>
@@ -710,6 +711,9 @@
                             class="border rounded px-2 py-1 text-sm bg-white focus:ring-1 focus:ring-gray-400 focus:outline-none disabled:bg-gray-100"
                           />
                         </td>
+
+                        
+                        <td class="px-4 py-3 text-center">{{ sch.shift_end_date || '-' }}</td>
 
                         <td class="px-4 py-3 text-center font-semibold" :class="lateClass(sch)">
                           {{ calculateLate(sch.time_in, sch.actual_time_in) }}

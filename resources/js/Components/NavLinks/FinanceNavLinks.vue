@@ -210,6 +210,12 @@ const postExpenseOpen = ref(false)
         </ul>
       </transition>
 
+      
+      <Link :href="route('frontdoor.reservations.index')" class="flex items-center w-full px-3 py-2 rounded-base hover:bg-gray-200 hover:text-fg-brand space-x-2">
+        <i class="fa fa-list"></i>
+        <span>Reservations</span>
+      </Link>
+
       <!-- EXPENSES -->
       <button @click="expensesOpen = !expensesOpen" type="button"
         class="flex items-center w-full justify-between px-3 py-2 rounded-base hover:bg-gray-200 hover:text-fg-brand">

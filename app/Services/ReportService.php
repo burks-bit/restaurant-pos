@@ -600,35 +600,13 @@ class ReportService
                     fn($q) => $q->where('ord.shift_id', $shiftId)
                 );
         };
-        
-        // original query for dine-in payments (before the fix)
-        // Dine-in: orders with a table, excluding rows where reservation fee was applied at checkout
-        //  $dineIn = $baseQuery()
-        //      ->whereNotNull('ord.table_number')
-        //      ->whereNotIn('ord.id', fn($q) =>
-        //          $q->select('order_id')
-        //          ->from('order_payments')
-        //          ->where('remarks', 'Reservation fee applied')
-        //      )
-        //      ->when($hasCashierFilter, fn($q) => $q->whereIn('ord.user_id', $targetUserIds))
-        //      ->select('pm.name as payment_method_name', DB::raw('SUM(ordp.amount) as total'))
-        //      ->groupBy('pm.id', 'pm.name')
-        //      ->get();
 
-        // RSVP: reservation fee collection orders (no table yet, tied to a reservation)
-        //  $rsvp = $baseQuery()
-        //      ->whereNotNull('ord.reservation_id')
-        //      ->whereNull('ord.table_number')
-        //      ->whereNull('ordp.remarks')
-        //      ->select('pm.name as payment_method_name', DB::raw('SUM(ordp.amount) as total'))
-        //      ->groupBy('pm.id', 'pm.name')
-        //      ->get();
-
+        // Dine-in: orders with a table, excluding the reservation-fee-redemption row itself
         $dineIn = $baseQuery()
             ->whereNotNull('ord.table_number')
             ->where(function ($q) {
                 $q->whereNull('ordp.remarks')
-                  ->orWhere('ordp.remarks', '!=', 'Reservation fee applied');
+                ->orWhere('ordp.remarks', '!=', 'Reservation fee applied');
             })
             ->when($hasCashierFilter, fn($q) => $q->whereIn('ord.user_id', $targetUserIds))
             ->select('pm.name as payment_method_name', DB::raw('SUM(ordp.amount) as total'))
@@ -645,9 +623,19 @@ class ReportService
             ->groupBy('pm.id', 'pm.name')
             ->get();
 
-        // Merge: sum totals where the same payment method appears in both result sets
+        // ── NEW: Single Orders — no table, no reservation (e.g. SO- prefixed orders) ──
+        $singleOrders = $baseQuery()
+            ->whereNull('ord.table_number')
+            ->whereNull('ord.reservation_id')
+            ->when($hasCashierFilter, fn($q) => $q->whereIn('ord.user_id', $targetUserIds))
+            ->select('pm.name as payment_method_name', DB::raw('SUM(ordp.amount) as total'))
+            ->groupBy('pm.id', 'pm.name')
+            ->get();
+
+        // Merge all three buckets
         return $dineIn
             ->concat($rsvp)
+            ->concat($singleOrders)
             ->groupBy('payment_method_name')
             ->map(fn($group) => (float) $group->sum('total'))
             ->toArray();
@@ -680,8 +668,18 @@ class ReportService
         };
 
         // ── Total Sales: full billed subtotal of dine-in orders, BEFORE any DP credit is netted out ──
+        // $totalSales = (float) $baseOrderQuery()
+        //     ->whereNotNull('ord.table_number')
+        //     ->when($hasCashierFilter, fn($q) => $q->whereIn('ord.user_id', $targetUserIds))
+        //     ->sum('ord.subtotal');
+
         $totalSales = (float) $baseOrderQuery()
-            ->whereNotNull('ord.table_number')
+            ->where(function ($q) {
+                $q->whereNotNull('ord.table_number')
+                ->orWhere(function ($q2) {
+                    $q2->whereNull('ord.table_number')->whereNull('ord.reservation_id');
+                });
+            })
             ->when($hasCashierFilter, fn($q) => $q->whereIn('ord.user_id', $targetUserIds))
             ->sum('ord.subtotal');
 
@@ -894,6 +892,7 @@ class ReportService
             'cashier_id' => $request->cashier_id,
             'shift_id'   => $request->shift_id,
         ]);
+        
         $data = $this->getSalesReportData(
             $request->start_date,
             $request->end_date,

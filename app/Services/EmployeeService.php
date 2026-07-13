@@ -698,6 +698,35 @@ class EmployeeService
         ]);
     }
 
+    public function fetchDTR(Employee $employee, ?string $startDate = null, ?string $endDate = null)
+    {
+        $start = $startDate ? Carbon::parse($startDate)->startOfDay() : Carbon::now()->startOfMonth();
+        $end   = $endDate ? Carbon::parse($endDate)->endOfDay() : Carbon::now()->endOfMonth();
+
+        $employee->load([
+            'schedules' => function ($query) use ($start, $end) {
+                $query->where(function ($q) use ($start, $end) {
+                        // Normal shifts: schedule_date falls in range
+                        $q->whereBetween('schedule_date', [$start, $end])
+                        // Overnight shifts: the shift's end date falls in range,
+                        // even if schedule_date (start) is the day before
+                        ->orWhereBetween('shift_end_date', [$start, $end]);
+                    })
+                    ->with('overtime')
+                    ->orderBy('schedule_date');
+            }
+        ]);
+
+        return response()->json([
+            'employee'  => $employee,
+            'schedules' => $employee->schedules,
+            'period'    => [
+                'start' => $start->toDateString(),
+                'end'   => $end->toDateString(),
+            ]
+        ]);
+    }
+
     public function showDTR_orig(Employee $employee)
     {
         $schedules = $employee->schedules()->orderBy('schedule_date')->get();

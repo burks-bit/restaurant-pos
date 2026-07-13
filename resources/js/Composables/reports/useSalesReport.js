@@ -141,6 +141,26 @@ export function useSalesReport() {
   const formatDate = (date) => {
     return new Date(date).toLocaleDateString()
   }
+  
+  const paymentMethodColumns = computed(() => {
+    const methods = new Set()
+    orders.value.forEach(order => {
+      order.payments?.forEach(p => {
+        if (p.payment_method?.name) {
+          methods.add(p.payment_method.name)
+        }
+      })
+    })
+    return Array.from(methods).sort()
+  })
+
+  const getOrderPaymentAmount = (order, methodName) => {
+    return Number(
+      order.payments
+        ?.filter(p => p.payment_method?.name === methodName && !p.is_void)
+        .reduce((sum, p) => sum + Number(p.amount || 0), 0) || 0
+    )
+  }
 
   const exportToExcel = () => {
     if (orders.value.length === 0) {
@@ -186,6 +206,8 @@ export function useSalesReport() {
     totalMayaSales,
     paymentBreakdown,
     exportToExcel,
-    payments
+    payments,
+    paymentMethodColumns,
+    getOrderPaymentAmount,
   }
 }

@@ -203,14 +203,12 @@ class ReservationService
                 'reservation_id'              => $reservation->id,
             ]);
 
-            // --- 5. Create Order Payment (only when a reservation fee was collected) ---
+            // --- 5. Create Order Payment and sales ledger entry (only when a reservation fee was collected) ---
             $reservationFee = (float) ($data['reservation_fee'] ?? 0);
-            
+            $paymentMethod = PaymentMethod::where('code', 'reservation_fee')->first();
+
             if ($reservationFee > 0) {
-                // Resolve the PaymentMethod model from the free-text fee_payment_method string,
-                // or fall back to null-safe checks below.
-                $paymentMethod = PaymentMethod::where('code', 'reservation_fee')->first();
-                OrderPayment::create([
+                $createdOP = OrderPayment::create([
                     'order_id'         => $order->id,
                     'payment_method_id' => $paymentMethod?->id,
                     'amount'           => $reservationFee,

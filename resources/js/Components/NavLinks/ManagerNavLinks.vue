@@ -29,6 +29,11 @@ const postExpenseOpen = ref(false)
         <span>Dashboard</span>
       </Link>
 
+      <Link :href="route('frontdoor.reservations.index')" class="flex items-center w-full px-3 py-2 rounded-base hover:bg-gray-200 hover:text-fg-brand space-x-2">
+        <i class="fa fa-list"></i>
+        <span>Reservations</span>
+      </Link>
+
       <!-- POS -->
       <button
         @click="posOpen = !posOpen"

@@ -500,7 +500,7 @@ export function useEmployeesIndex(props) {
       : 'text-gray-600'
   }
 
-  const filterSchedules = () => {
+  const filterSchedules = async () => {
     if (!payrollStartDate.value || !payrollEndDate.value) {
       alert('Please select both start and end dates.')
       return
@@ -508,6 +508,28 @@ export function useEmployeesIndex(props) {
 
     if (new Date(payrollStartDate.value) > new Date(payrollEndDate.value)) {
       alert('Start date cannot be after end date.')
+      return
+    }
+
+    try {
+      const payload = {
+        start_date: payrollStartDate.value,
+        end_date: payrollEndDate.value,
+      }
+
+      const postUrl = route(`${prefix.value}.employees.dtr.fetch`, {
+        employee: selectedEmployee.value.id,
+      })
+
+      const { data } = await axios.post(postUrl, payload)
+
+      schedules.value = data.schedules
+      // if you need these elsewhere:
+      // employee.value = data.employee
+      // period.value = data.period
+    } catch (error) {
+      console.error('Failed to fetch DTR:', error)
+      alert('Error fetching DTR.')
     }
   }
 

@@ -212,6 +212,19 @@ class EmployeeController extends Controller
             return response()->json(['message' => 'Failed to load DTR.'], 500);
         }
     }
+    
+    public function fetchDTR(Request $request, Employee $employee)
+    {
+        try {
+            $startDate = $request->input('start_date');
+            $endDate   = $request->input('end_date');
+
+            return $this->employeeService->fetchDTR($employee, $startDate, $endDate);
+        } catch (\Throwable $e) {
+            Log::error('EmployeeController@fetchDTR failed: ' . $e->getMessage());
+            return response()->json(['message' => 'Failed to load DTR.'], 500);
+        }
+    }
 
     public function showDTR_orig(Employee $employee)
     {
