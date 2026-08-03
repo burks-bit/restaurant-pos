@@ -383,32 +383,75 @@ class DTRService
                 if ($schedule->status === 'Absent') continue;
                 if (!$schedule->actual_time_in || !$schedule->actual_time_out) continue;
 
+                //$scheduleDate = Carbon::parse($schedule->schedule_date);
+
+                //// Use shift_end_date if stored, otherwise fall back to same day
+                //$shiftEndDate = $schedule->shift_end_date
+                //    ? Carbon::parse($schedule->shift_end_date)
+                //    : $scheduleDate->copy();
+
+                //// Anchor shift start/end to their correct calendar dates
+                //$shiftStart = $scheduleDate->copy()->setTimeFromTimeString($schedule->time_in);
+                //$shiftEnd   = $shiftEndDate->copy()->setTimeFromTimeString($schedule->time_out);
+
+                //// Anchor actual time in/out — actual_time_out date = shift_end_date if crosses midnight
+                //// $timeIn  = Carbon::parse($schedule->actual_time_in);
+                //// $timeOut = Carbon::parse($schedule->actual_time_out);
+
+                //// Anchor actual_time_in to the schedule date (not today's date)
+                //$timeIn = $scheduleDate->copy()->setTimeFromTimeString(
+                //    Carbon::parse($schedule->actual_time_in)->format('H:i:s')
+                //);
+
+                //// Anchor actual_time_out to shift_end_date (handles overnight shifts)
+                //$timeOut = $shiftEndDate->copy()->setTimeFromTimeString(
+                //    Carbon::parse($schedule->actual_time_out)->format('H:i:s')
+                //);
+
+                //// Safety net: if time_out still ends up before/equal time_in, it crossed midnight unexpectedly
+                //if ($timeOut->lte($timeIn)) {
+                //    $timeOut->addDay();
+                //}
+
+                //$workedHours = max(0, $timeIn->floatDiffInHours($timeOut));
+
+                //$totalHours += $workedHours;
+                //$totalDays++;
+
+                //// Late: employee arrived after shift start
+                //if ($timeIn->gt($shiftStart)) {
+                //    $totalLate += $shiftStart->diffInMinutes($timeIn);
+                //}
+
+                //// Undertime: employee left before shift end
+                //if ($timeOut->lt($shiftEnd)) {
+                //    $totalUndertime += $timeOut->diffInMinutes($shiftEnd);
+                //}
+
                 $scheduleDate = Carbon::parse($schedule->schedule_date);
 
-                // Use shift_end_date if stored, otherwise fall back to same day
                 $shiftEndDate = $schedule->shift_end_date
                     ? Carbon::parse($schedule->shift_end_date)
                     : $scheduleDate->copy();
 
-                // Anchor shift start/end to their correct calendar dates
-                $shiftStart = $scheduleDate->copy()->setTimeFromTimeString($schedule->time_in);
-                $shiftEnd   = $shiftEndDate->copy()->setTimeFromTimeString($schedule->time_out);
+                // Only build shift anchors if the scheduled times exist
+                $shiftStart = $schedule->time_in
+                    ? $scheduleDate->copy()->setTimeFromTimeString($schedule->time_in)
+                    : null;
 
-                // Anchor actual time in/out — actual_time_out date = shift_end_date if crosses midnight
-                // $timeIn  = Carbon::parse($schedule->actual_time_in);
-                // $timeOut = Carbon::parse($schedule->actual_time_out);
+                $shiftEnd = $schedule->time_out
+                    ? $shiftEndDate->copy()->setTimeFromTimeString($schedule->time_out)
+                    : null;
 
-                // Anchor actual_time_in to the schedule date (not today's date)
+                // Actual times (already guaranteed non-null by the earlier continue)
                 $timeIn = $scheduleDate->copy()->setTimeFromTimeString(
                     Carbon::parse($schedule->actual_time_in)->format('H:i:s')
                 );
 
-                // Anchor actual_time_out to shift_end_date (handles overnight shifts)
                 $timeOut = $shiftEndDate->copy()->setTimeFromTimeString(
                     Carbon::parse($schedule->actual_time_out)->format('H:i:s')
                 );
 
-                // Safety net: if time_out still ends up before/equal time_in, it crossed midnight unexpectedly
                 if ($timeOut->lte($timeIn)) {
                     $timeOut->addDay();
                 }
@@ -418,13 +461,13 @@ class DTRService
                 $totalHours += $workedHours;
                 $totalDays++;
 
-                // Late: employee arrived after shift start
-                if ($timeIn->gt($shiftStart)) {
+                // Late: only if we know the scheduled start
+                if ($shiftStart && $timeIn->gt($shiftStart)) {
                     $totalLate += $shiftStart->diffInMinutes($timeIn);
                 }
 
-                // Undertime: employee left before shift end
-                if ($timeOut->lt($shiftEnd)) {
+                // Undertime: only if we know the scheduled end
+                if ($shiftEnd && $timeOut->lt($shiftEnd)) {
                     $totalUndertime += $timeOut->diffInMinutes($shiftEnd);
                 }
 

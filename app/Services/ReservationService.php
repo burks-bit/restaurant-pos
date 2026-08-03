@@ -37,6 +37,19 @@ class ReservationService
                 }])
                 ->get();
 
+            // $mapped = $cashiersOnDuty->map(function ($employee) {
+            //     $schedule = $employee->schedules->first();
+
+            //     $shiftLabel = $schedule
+            //         ? Carbon::parse($schedule->time_in)->format('g:iA') . '-' . Carbon::parse($schedule->time_out)->format('g:iA')
+            //         : 'No Shift';
+
+            //     return [
+            //         'employee_id' => $employee->id,
+            //         'name'        => $employee->first_name . ' ' . $employee->last_name,
+            //     ];
+            // });
+
             $mapped = $cashiersOnDuty->map(function ($employee) {
                 $schedule = $employee->schedules->first();
 
@@ -47,12 +60,21 @@ class ReservationService
                 return [
                     'employee_id' => $employee->id,
                     'name'        => $employee->first_name . ' ' . $employee->last_name,
+                    'shift_label' => $shiftLabel,
+                    'user'        => $employee->user ? [
+                        'id'       => $employee->user->id,
+                        'name'     => $employee->user->name,
+                        'email'    => $employee->user->email,
+                        'username' => $employee->user->username ?? null,
+                        // add whatever else the frontend needs
+                    ] : null,
                 ];
             });
 
             $reservationsQuery = Reservation::with([
                     'reservationPax.headPricingRule',
                     'pricingScheme',
+                    'order.user',
                 ])
                 ->orderBy('created_at', 'desc');
 
@@ -68,6 +90,8 @@ class ReservationService
             // both empty → no filter, show all
 
             $reservations = $reservationsQuery->get();
+            Log::info($mapped);
+            // Log::info($reservations);
 
             return Inertia::render('Reservations/Index', [
                 'reservations'    => $reservations,
@@ -245,6 +269,7 @@ class ReservationService
             'pax_breakdown.*.subtotal'       => 'required|numeric|min:0',
             'pax'                    => 'required|integer|min:1',
         ]);
+        Log::info('ReservationService@update: Validated data', $data);
  
         DB::transaction(function () use ($data, $reservation) {
             $reservation->update([

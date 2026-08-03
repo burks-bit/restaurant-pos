@@ -155,6 +155,8 @@
                 :pricing-schemes="pricingSchemes"
                 :pricing-rules="pricingRules"
                 :processing="processing"
+                :shifts="shifts"
+                :cashiersOnDuty="cashiersOnDuty"
                 @submit="updateReservation"
                 @cancel="showEditModal = false"
                 @qty-change="(i) => onQtyChange(editForm.pax_breakdown, i)"

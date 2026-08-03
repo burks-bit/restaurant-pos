@@ -32,16 +32,19 @@ use Inertia\Inertia;
 */
 
 Route::get('/', function () {
-    if (Auth::check()) {
-        return Inertia::render('Welcome', [
-            'canLogin'       => false,
-            'canRegister'    => false,
-            'laravelVersion' => Application::VERSION,
-            'phpVersion'     => PHP_VERSION,
-        ]);
-    }
+    return Auth::check()
+        ? redirect()->route('dashboard')
+        : redirect()->route('login');
+    // if (Auth::check()) {
+    //     return Inertia::render('Welcome', [
+    //         'canLogin'       => false,
+    //         'canRegister'    => false,
+    //         'laravelVersion' => Application::VERSION,
+    //         'phpVersion'     => PHP_VERSION,
+    //     ]);
+    // }
 
-    return redirect()->route('login');
+    // return redirect()->route('login');
 });
 
 /*

@@ -100,6 +100,7 @@ export function useReservations(reservationsSource) {
         }
       })
     }
+    // console.log('openEditModal', reservation.order?.user)
     editForm.value = {
       id: reservation.id,
       name: reservation.name,
@@ -114,7 +115,7 @@ export function useReservations(reservationsSource) {
       fee_payment_method: reservation.fee_payment_method ?? 'cash',
       fee_reference_no: reservation.fee_reference_no ?? '',
       shift_id: reservation.shift_id ?? null,
-      cashier_employee_id: reservation.cashier_employee_id ?? null,
+      cashier_employee_id: reservation.cashier_employee_id ?? reservation.order?.user?.id,
     }
     showEditModal.value = true
   }
