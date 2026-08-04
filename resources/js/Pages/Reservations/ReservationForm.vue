@@ -7,6 +7,7 @@
       <div class="space-y-4">
         <!-- Shift -->
         <div>
+          <!-- {{ form }} -->
           <label class="block text-sm font-medium text-gray-700 mb-1">Shift</label>
           <select
             v-model="form.shift_id"
@@ -165,6 +166,7 @@
           >
             <option value="pending">Pending</option>
             <option value="confirmed">Confirmed</option>
+            <option value="seated">Seated</option>
             <option value="cancelled">Cancelled</option>
           </select>
         </div>

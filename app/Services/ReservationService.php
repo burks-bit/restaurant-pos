@@ -90,7 +90,7 @@ class ReservationService
             // both empty → no filter, show all
 
             $reservations = $reservationsQuery->get();
-            Log::info($mapped);
+            // Log::info($mapped);
             // Log::info($reservations);
 
             return Inertia::render('Reservations/Index', [
@@ -110,13 +110,14 @@ class ReservationService
 
     public function store(Request $request)
     {
+        Log::info('ReservationService@store: Validated data', $request->all());
         $data = $request->validate([
             'name'                   => 'required|string|max:191',
             'pricing_scheme_id'      => 'required|exists:pricing_schemes,id',
             'reservation_datetime'   => 'required|date',
             'contact_number'         => 'nullable|string|max:191',
             'remarks'                => 'nullable|string',
-            'status'                 => 'in:pending,confirmed,cancelled',
+            'status'                 => 'in:pending,confirmed,seated,cancelled',
             'reservation_fee'        => 'nullable|numeric|min:0',
             'fee_payment_method'     => 'nullable|string|max:191',
             'fee_reference_no'       => 'nullable|string|max:191',
@@ -127,7 +128,8 @@ class ReservationService
             'pax_breakdown.*.subtotal'       => 'required|numeric|min:0',
             'pax'                    => 'required|integer|min:1',
             'shift_id'               => 'required|exists:shifts,id',
-            'cashier_employee_id'    => 'nullable|exists:employees,id',
+            // 'cashier_employee_id'    => 'nullable|exists:employees,id',
+            'cashier_user_id'        => 'nullable|exists:users,id',
         ]);
 
         DB::transaction(function () use ($data) {
@@ -203,7 +205,7 @@ class ReservationService
 
             // --- 4. Create Order ---
             $order = Order::create([
-                'user_id'          => $data['cashier_employee_id'],
+                'user_id'          => $data['cashier_user_id'],
                 'order_no'         => $orderNo,
                 'subtotal'         => $data['reservation_fee'],
                 'total_discount'   => 0,
@@ -252,13 +254,15 @@ class ReservationService
  
     public function update(Request $request, Reservation $reservation)
     {
+        Log::info('ReservationService@update: Validated data', $request->all());
+
         $data = $request->validate([
             'name'                   => 'required|string|max:191',
             'pricing_scheme_id'      => 'required|exists:pricing_schemes,id',
             'reservation_datetime'   => 'required|date',
             'contact_number'         => 'nullable|string|max:191',
             'remarks'                => 'nullable|string',
-            'status'                 => 'in:pending,confirmed,cancelled',
+            'status'                 => 'in:pending,confirmed,seated,cancelled',
             'reservation_fee'        => 'nullable|numeric|min:0',
             'fee_payment_method'     => 'nullable|string|max:191',
             'fee_reference_no'       => 'nullable|string|max:191',
@@ -269,7 +273,6 @@ class ReservationService
             'pax_breakdown.*.subtotal'       => 'required|numeric|min:0',
             'pax'                    => 'required|integer|min:1',
         ]);
-        Log::info('ReservationService@update: Validated data', $data);
  
         DB::transaction(function () use ($data, $reservation) {
             $reservation->update([
