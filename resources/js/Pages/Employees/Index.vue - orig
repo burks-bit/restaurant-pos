@@ -837,9 +837,8 @@
               </div>
             </div>
               <div class="flex justify-end gap-2 mt-4">
-                <button @click="updateDTR" class="px-2 py-1 bg-blue-600 text-white rounded hover:bg-blue-700">
-                  <!-- <span class="fa fa-save"></span> Update DTR -->
-                  <span class="fa fa-save"></span> Update DTR
+                <button @click="saveDTR" class="px-2 py-1 bg-blue-600 text-white rounded hover:bg-blue-700">
+                  <span class="fa fa-save"></span> Save DTR
                 </button>
               </div>
             </v-form>
@@ -1140,7 +1139,6 @@ const {
   openDTR,
   closeDTRModal,
   saveDTR,
-  updateDTR,
 
   calculateLate,
   calculateUndertime,

@@ -756,6 +756,27 @@ class EmployeeService
         return response()->json(['message' => 'DTR updated successfully']);
     }
 
+    public function updateDTRIndividualy(Request $request, Employee $employee)
+    {
+        Log::info('Updating DTR for employee ID: ' . $employee->id);
+        Log::info('Request data: ' . json_encode($request->all()));
+        $request->validate([
+            'schedules.*.id' => 'required|exists:employee_schedules,id',
+            'schedules.*.actual_time_in' => 'nullable|date_format:H:i',
+            'schedules.*.actual_time_out' => 'nullable|date_format:H:i',
+        ]);
+
+        foreach ($request->schedules as $sch) {
+            $schedule = EmployeeSchedule::find($sch['id']);
+            $schedule->update([
+                'actual_time_in' => $sch['actual_time_in'],
+                'actual_time_out' => $sch['actual_time_out'],
+            ]);
+        }
+
+        return response()->json(['message' => 'DTR updated successfully']);
+    }
+
     public function generateEmployeePayrollPdf(Request $request, Employee $employee)
     {
         $startDate = $request->start_date;

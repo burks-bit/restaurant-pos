@@ -449,30 +449,15 @@ export function useEmployeesIndex(props) {
   const saveDTR = async () => {
     try {
       const payload = { schedules: schedules.value }
-      const postUrl = route(`${prefix.value}.employees.dtr.update`, {
-        employee: selectedEmployee.value.id,
-      })
-
-      await axios.post(postUrl, payload)
-      alert('DTR saved successfully!')
-    } catch (error) {
-      console.error('Failed to save DTR:', error)
-      alert('Error saving DTR.')
-    }
-  }
-
-  const updateDTR = async () => {
-    try {
-      const payload = { schedules: schedules.value }
       const putUrl = route(`${prefix.value}.employees.dtr.updateDtr`, {
         employee: selectedEmployee.value.id,
       })
 
       await axios.put(putUrl, payload)
-      alert('DTR updated successfully!')
+      alert('DTR saved successfully!')
     } catch (error) {
-      console.error('Failed to update DTR:', error)
-      alert('Error updating DTR.')
+      console.error('Failed to save DTR:', error)
+      alert('Error saving DTR.')
     }
   }
 
@@ -702,7 +687,6 @@ export function useEmployeesIndex(props) {
     openDTR,
     closeDTRModal,
     saveDTR,
-    updateDTR,
 
     calculateLate,
     calculateUndertime,

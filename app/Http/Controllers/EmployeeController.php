@@ -246,6 +246,16 @@ class EmployeeController extends Controller
         }
     }
 
+    public function updateDTRIndividualy(Request $request, Employee $employee)
+    {
+        try {
+            return $this->employeeService->updateDTRIndividualy($request, $employee);
+        } catch (\Throwable $e) {
+            Log::error('EmployeeController@updateDTR failed: ' . $e->getMessage());
+            return response()->json(['message' => 'Failed to update DTR.'], 500);
+        }
+    }
+
     public function generateEmployeePayrollPdf(Request $request, Employee $employee)
     {
         try {
