@@ -178,7 +178,10 @@
                 <!-- Status -->
                 <select v-model="form.status" class="border rounded px-3 py-2 text-sm">
                   <option value="active">Active</option>
+                  <option value="awol">AWOL</option>
                   <option value="inactive">Inactive</option>
+                  <option value="resigned">Resigned</option>
+                  <option value="terminated">Terminated</option>
                 </select>
                 
               </div>

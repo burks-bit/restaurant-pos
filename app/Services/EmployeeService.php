@@ -64,7 +64,8 @@ class EmployeeService
             'start_date' => 'required|date',
             'end_date'   => 'required|date|after_or_equal:start_date',
             'time_in'    => 'nullable|date_format:H:i',
-            'time_out'   => 'nullable|date_format:H:i|after:time_in',
+            // No 'after:time_in' — overnight shifts (e.g. 15:00 -> 00:00) are valid.
+            'time_out'   => 'nullable|date_format:H:i',
             'status'     => 'required|string',
             'remarks'    => 'nullable|string|max:255',
         ]);
@@ -87,6 +88,14 @@ class EmployeeService
             $dates = CarbonPeriod::create($request->start_date, $request->end_date);
 
             foreach ($dates as $date) {
+                // If time_out < time_in, the shift crosses midnight — end date is next day
+                $shiftEndDate = null;
+                if ($timeIn && $timeOut) {
+                    $shiftEndDate = Carbon::createFromFormat('H:i', $timeOut)->lt(Carbon::createFromFormat('H:i', $timeIn))
+                        ? $date->copy()->addDay()->toDateString()   // overnight shift
+                        : $date->copy()->toDateString();
+                }
+
                 EmployeeSchedule::updateOrCreate(
                     [
                         'employee_id'   => $employee->id,
@@ -95,6 +104,7 @@ class EmployeeService
                     [
                         'time_in' => $timeIn,
                         'time_out' => $timeOut,
+                        'shift_end_date' => $shiftEndDate,
                         'status' => $request->status,
                         'remarks' => $request->remarks,
                     ]
@@ -519,11 +529,16 @@ class EmployeeService
 
     public function updateSchedule(Request $request, EmployeeSchedule $schedule)
     {
+        // Log::info('Updating schedule ID: ' . $schedule->id);
+        // Log::info('Request data: ' . json_encode($request->all()));
+        // Log::info('Current schedule data: ' . json_encode($schedule->all()));
         $validated = $request->validate([
             'schedule_date' => 'required|date',
             // 'shift'         => 'nullable|in:Morning,Night',
             'time_in'       => 'nullable|date_format:H:i,H:i:s',
-            'time_out'      => 'nullable|date_format:H:i,H:i:s|after:time_in',
+            // No 'after:time_in' — overnight shifts (e.g. 15:00 -> 00:00) are valid.
+            // shift_end_date is recomputed below instead.
+            'time_out'      => 'nullable|date_format:H:i,H:i:s',
             'status'        => 'required|in:Scheduled,Absent,Leave,Day Off',
             'remarks'       => 'nullable|string|max:255',
         ]);
@@ -531,11 +546,32 @@ class EmployeeService
         if (in_array($validated['status'], ['Absent', 'Leave', 'Day Off'])) {
             $validated['time_in'] = null;
             $validated['time_out'] = null;
+            $validated['shift_end_date'] = null;
             // $validated['shift'] = null;
         } else {
             if (empty($validated['time_in']) || empty($validated['time_out'])) {
                 return back()->withErrors([
                     'time_in' => 'Time In and Time Out are required for Scheduled status.'
+                ]);
+            }
+
+            // If time_out < time_in, the shift crosses midnight — end date is next day
+            $scheduleDate = Carbon::parse($validated['schedule_date']);
+            $timeIn  = Carbon::createFromFormat('H:i', substr($validated['time_in'], 0, 5));
+            $timeOut = Carbon::createFromFormat('H:i', substr($validated['time_out'], 0, 5));
+            $shiftEndDate = $timeOut->lt($timeIn)
+                ? $scheduleDate->copy()->addDay()
+                : $scheduleDate->copy();
+
+            $validated['shift_end_date'] = $shiftEndDate->toDateString();
+
+            // Validate: shift must not exceed 24 hours
+            $start = $scheduleDate->copy()->setTimeFromTimeString($validated['time_in']);
+            $end   = $shiftEndDate->copy()->setTimeFromTimeString($validated['time_out']);
+
+            if ($end->diffInHours($start) > 24) {
+                return back()->withErrors([
+                    'time_out' => 'Shift duration cannot exceed 24 hours.'
                 ]);
             }
         }
@@ -545,6 +581,7 @@ class EmployeeService
             // 'shift' => $validated['shift'],
             'time_in' => $validated['time_in'],
             'time_out' => $validated['time_out'],
+            'shift_end_date' => $validated['shift_end_date'] ?? null,
             'status' => $validated['status'],
             'remarks' => $validated['remarks'],
         ]);

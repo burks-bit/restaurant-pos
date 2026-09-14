@@ -95,4 +95,31 @@ class PayrollController extends Controller
             return back()->with('error', 'Failed to generate selected payslips.');
         }
     }
+
+    public function exportExcel(Payroll $payroll)
+    {
+        try {
+            return $this->payrollService->exportExcel($payroll);
+        } catch (\Throwable $e) {
+            Log::error('PayrollController@exportExcel failed: ' . $e->getMessage());
+            return back()->with('error', 'Failed to export payroll to Excel.');
+        }
+    }
+
+    public function importExcel(Request $request, Payroll $payroll)
+    {
+        try {
+            return $this->payrollService->importExcel($request, $payroll);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            // Let Laravel return the standard 422 with per-field errors so the
+            // frontend can show the exact reason why the import was rejected.
+            throw $e;
+        } catch (\Throwable $e) {
+            Log::error('PayrollController@importExcel failed: ' . $e->getMessage());
+            return response()->json([
+                'message' => 'Failed to import the payroll Excel file.',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
 }

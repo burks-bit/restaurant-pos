@@ -58,13 +58,21 @@ export function usePayrollDetails(payroll) {
   }
 
   // ─── Net Pay ───────────────────────────────────────────────────────────────
-  // Net pay is always derived client-side from gross pay minus total deductions,
+  // Net pay is always derived client-side as gross pay + earnings − deductions,
   // rather than trusting a possibly-stale emp.net_pay value from the server.
+  // When the earnings/deductions lists are available they are summed directly
+  // (so the column reacts immediately after posting); otherwise we fall back
+  // to the stored totals.
 
   const getNetPay = (employee) => {
     const gross = Number(employee.gross_pay || 0)
-    const deductions = Number(employee.total_deductions || 0)
-    return gross - deductions
+    const earnings = (employee.earnings?.length
+      ? sumEarnings(employee.earnings)
+      : Number(employee.total_earnings || 0))
+    const deductions = (employee.deductions?.length
+      ? sumDeductions(employee.deductions)
+      : Number(employee.total_deductions || 0))
+    return gross + earnings - deductions
   }
 
   // ─── Deductions ────────────────────────────────────────────────────────────
@@ -280,9 +288,15 @@ export function usePayrollDetails(payroll) {
 
       if (index !== -1) {
         if (updatedItem) {
+          // The backend returns the item with its earnings relation loaded but
+          // does not persist a total_earnings column, so derive it locally to
+          // keep the Net Pay column reactive.
+          const newEarnings = updatedItem.earnings || []
           payrollItems.value[index] = {
             ...payrollItems.value[index],
             ...updatedItem,
+            earnings: newEarnings,
+            total_earnings: sumEarnings(newEarnings),
           }
         } else {
           const newList = buildEarningsFromForm()
@@ -345,6 +359,52 @@ export function usePayrollDetails(payroll) {
     window.open(`${url}?${queryString}`, '_blank')
   }
 
+  // ─── Excel Export ──────────────────────────────────────────────────────────
+
+  const downloadExcel = () => {
+    const url = route(`${prefix.value}.payroll.export.excel`, payroll.id)
+    window.open(url, '_blank')
+  }
+
+  // ─── Excel Import ──────────────────────────────────────────────────────────
+
+  const excelFileInput = ref(null)
+  const isUploadingExcel = ref(false)
+
+  const uploadExcel = async (event) => {
+    const file = event.target.files?.[0]
+    if (!file) return
+
+    const formData = new FormData()
+    formData.append('file', file)
+
+    isUploadingExcel.value = true
+    try {
+      const { data } = await axios.post(
+        route(`${prefix.value}.payroll.excel.import`, payroll.id),
+        formData,
+        { headers: { 'Content-Type': 'multipart/form-data' } }
+      )
+
+      alert(data?.message || 'Payroll Excel imported successfully.')
+      // Reload so the imported earnings, deductions and recomputed net pay
+      // are reflected on the page.
+      window.location.reload()
+    } catch (error) {
+      console.error(error)
+      // Show the backend's validation message when available, otherwise a
+      // generic message.
+      const message =
+        error.response?.data?.message ||
+        error.response?.data?.errors?.file?.[0] ||
+        'Failed to import the payroll Excel file.'
+      alert(message)
+    } finally {
+      isUploadingExcel.value = false
+      if (event.target) event.target.value = ''
+    }
+  }
+
   const formatCurrency = (value) => {
     return Number(value || 0).toLocaleString('en-US', {
       minimumFractionDigits: 2,
@@ -394,5 +454,11 @@ export function usePayrollDetails(payroll) {
     formatCurrency,
     printSinglePayslip,
     printSelectedPayslips,
+
+    downloadExcel,
+
+    excelFileInput,
+    isUploadingExcel,
+    uploadExcel,
   }
 }

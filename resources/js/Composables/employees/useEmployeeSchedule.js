@@ -330,7 +330,20 @@ export function useEmployeeSchedule() {
           onSuccess: () => {
             const index = employee.value.schedules.findIndex(s => s.id === payload.id)
             if (index !== -1) {
-              employee.value.schedules[index] = { ...employee.value.schedules[index], ...payload }
+              // Mirror the server-side shift_end_date logic so the UI stays
+              // consistent: time_out < time_in means the shift crosses midnight.
+              let shiftEndDate = null
+              if (payload.time_in && payload.time_out) {
+                const crossesMidnight = payload.time_out.slice(0, 5) < payload.time_in.slice(0, 5)
+                const base = new Date(`${payload.schedule_date}T00:00:00`)
+                if (crossesMidnight) base.setDate(base.getDate() + 1)
+                shiftEndDate = formatLocalDate(base)
+              }
+              employee.value.schedules[index] = {
+                ...employee.value.schedules[index],
+                ...payload,
+                shift_end_date: shiftEndDate,
+              }
             }
             closeModal()
           },

@@ -13,6 +13,8 @@ class Payroll extends Model
         'total_gross',
         'total_deductions',
         'total_net',
+        'payslip_pdf_path',
+        'payslip_pdf_name',
     ];
 
     /*

@@ -155,6 +155,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/payroll/{payroll}/payslip/{payrollItem}/print', [PayrollController::class, 'printPayslipSingle'])->name('payroll.payslip.print.single');
         Route::get('/payroll/{payroll}/payslip/print-selected', [PayrollController::class, 'printPayslipSelected'])->name('payroll.payslip.print.selected');
         Route::get('/payroll/summary/print', [DTRController::class, 'printPayrollSummary'])->name('payroll.summary.print');
+
+        Route::get('/payroll/{payroll}/export', [PayrollController::class, 'exportExcel'])->name('payroll.export.excel');
+        Route::post('/payroll/{payroll}/import', [PayrollController::class, 'importExcel'])->name('payroll.excel.import');
     };
 
     $overtimeApprovalRoutes = function () {
