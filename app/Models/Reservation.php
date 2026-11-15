@@ -14,12 +14,14 @@ class Reservation extends Model
         'name', 'pricing_scheme_id', 'pax',
         'reservation_datetime', 'contact_number', 'remarks', 'status',
         'reservation_fee', 'fee_payment_method', 'fee_reference_no',
-        'table_session_id','shift_id'
+        'table_session_id','shift_id',
+        'package_id', 'package_pax', 'package_price'
     ];
  
     protected $casts = [
         'reservation_datetime' => 'datetime',
         'reservation_fee'      => 'decimal:2',
+        'package_price'        => 'decimal:2',
     ];
 
     /*
@@ -95,5 +97,10 @@ class Reservation extends Model
     public function order()
     {
         return $this->hasOne(Order::class);
+    }
+
+    public function package()
+    {
+        return $this->belongsTo(Package::class);
     }
 }

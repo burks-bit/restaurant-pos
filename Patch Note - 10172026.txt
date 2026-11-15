@@ -1,0 +1,15 @@
+September 14, 2026
+- PayrollGenerate.vue
+- DTRService.php
+- PayrollService.php
+- Payroll.php
+- usePayrollGenerate.js
+
+October 17, 2026
+- 
+- 
+- 
+- 
+- 
+- 
+

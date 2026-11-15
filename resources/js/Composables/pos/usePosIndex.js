@@ -16,6 +16,9 @@ export function usePosIndex() {
 
   const showPrintModal = ref(false)
   const isSeniorOrPWD = ref(false)
+  const seniorPax = ref(0)
+  const additionalPax = ref(0)
+  const timeExtensionAmount = ref(0)
   const voucherCode = ref('')
   const voucherApplied = ref(false)
   const voucherDiscount = ref(null)
@@ -85,6 +88,10 @@ export function usePosIndex() {
         is_void: Number(addon.is_void ?? 0),
         void_remarks: addon.void_remarks ?? '',
       })),
+      package_price: Number(session.package_price ?? 0),
+      package_pax: Number(session.package_pax ?? 0),
+      package_name: session.package_name ?? session.package?.name ?? null,
+      is_package: !!(session.package_id || Number(session.package_price ?? 0) > 0),
       reservation_fee: Number(session.reservation?.reservation_fee ?? 0),
     }
   }
@@ -110,6 +117,10 @@ export function usePosIndex() {
   }
 
   const getSessionBaseTotal = (session) => {
+    if (session?.is_package) {
+      return Number(session.package_price ?? 0)
+    }
+
     return (session.head_counts ?? []).reduce((sum, head) => {
       return sum + Number(head.subtotal || 0)
     }, 0)
@@ -222,6 +233,8 @@ export function usePosIndex() {
     cart.value = [normalizedSession]
     selectedAddons.value = mapSessionAddons(normalizedSession.addons ?? [])
     leftovers.value = []
+    additionalPax.value = 0
+    timeExtensionAmount.value = 0
     resetAddonModalState()
     resetDiscounts()
     resetPayments()
@@ -231,6 +244,8 @@ export function usePosIndex() {
     cart.value.splice(index, 1)
     selectedAddons.value = []
     leftovers.value = []
+    additionalPax.value = 0
+    timeExtensionAmount.value = 0
     resetAddonModalState()
     resetDiscounts()
     resetPayments()
@@ -567,8 +582,11 @@ export function usePosIndex() {
     showManagerDiscountModal.value = true
   }
 
-  const handleSeniorPWDChange = (event) => {
-    if (event.target.checked) {
+  const handleSeniorPWDChange = () => {
+    const count = Math.max(0, Math.floor(Number(seniorPax.value || 0)))
+    seniorPax.value = Math.min(count, totalPax.value)
+
+    if (seniorPax.value > 0) {
       requestManagerApproval('senior')
     } else {
       resetDiscounts()
@@ -630,6 +648,11 @@ export function usePosIndex() {
   }
 
   const closeManagerModal = () => {
+    if (approvalType.value === 'senior' && !managerApprovedDiscount.value) {
+      seniorPax.value = 0
+      isSeniorOrPWD.value = false
+    }
+
     showManagerDiscountModal.value = false
     selectedManager.value = null
     managerPassword.value = ''
@@ -642,6 +665,7 @@ export function usePosIndex() {
     voucherApplied.value = false
     voucherDiscount.value = null
     isSeniorOrPWD.value = false
+    seniorPax.value = 0
     voucherError.value = ''
     voucherSuccess.value = ''
     selectedManager.value = null
@@ -651,6 +675,10 @@ export function usePosIndex() {
 
   const baseSubtotal = computed(() => {
     if (cart.value.length === 0) return 0
+
+    if (cart.value[0].is_package) {
+      return Number(cart.value[0].package_price ?? 0)
+    }
 
     return cart.value[0].head_counts.reduce((sum, head) => {
       return sum + Number(head.subtotal || 0)
@@ -664,6 +692,53 @@ export function usePosIndex() {
     }, 0)
   })
 
+  // Reserved / admitted pax (the count the base price was computed from).
+  const sessionPax = computed(() => {
+    if (cart.value.length === 0) return 0
+
+    const session = cart.value[0]
+
+    if (session.is_package) {
+      return Number(session.package_pax || session.pax || 0)
+    }
+
+    const headQty = (session.head_counts ?? []).reduce(
+      (sum, head) => sum + Number(head.qty || 0),
+      0
+    )
+
+    return headQty || Number(session.pax || 0)
+  })
+
+  const totalPax = computed(() => {
+    return sessionPax.value
+  })
+
+  const perHeadRate = computed(() => {
+    if (sessionPax.value <= 0) return 0
+    return Number(baseSubtotal.value || 0) / sessionPax.value
+  })
+
+  const additionalPaxAmount = computed(() => {
+    return Math.max(0, Number(additionalPax.value || 0))
+  })
+
+  const timeExtensionCharge = computed(() => {
+    return Math.max(0, Number(timeExtensionAmount.value || 0))
+  })
+
+  const seniorCount = computed(() => {
+    const count = Math.max(0, Math.floor(Number(seniorPax.value || 0)))
+    return Math.min(count, totalPax.value)
+  })
+
+  const seniorDiscountAmount = computed(() => {
+    if (!managerApprovedDiscount.value) return 0
+    if (appliedDiscountType.value !== 'senior') return 0
+
+    return Math.round(seniorCount.value * perHeadRate.value * 0.20 * 100) / 100
+  })
+
   const leftoversTotal = computed(() => {
     return leftovers.value.reduce((sum, item) => {
       return sum + Number(item.price || 0)
@@ -672,6 +747,7 @@ export function usePosIndex() {
 
   const subtotal = computed(() => {
     return baseSubtotal.value + addonsTotal.value + leftoversTotal.value
+      + additionalPaxAmount.value + timeExtensionCharge.value
   })
 
   const discountAmount = computed(() => {
@@ -680,7 +756,7 @@ export function usePosIndex() {
     const base = Number(baseSubtotal.value || 0)
 
     if (appliedDiscountType.value === 'senior') {
-      return base * 0.2
+      return seniorDiscountAmount.value
     }
 
     if (appliedDiscountType.value === 'voucher' && voucherDiscount.value) {
@@ -778,6 +854,9 @@ export function usePosIndex() {
         approving_manager: selectedManager.value,
         reservation_fee_used: reservationFee.value,
         reservation_id: cart.value[0]?.reservation?.id ?? null,  // ← add this
+        additional_pax_amount: additionalPaxAmount.value,
+        time_extension_amount: timeExtensionCharge.value,
+        senior_pax: seniorCount.value,
       })
 
       voucherCode.value = ''
@@ -797,6 +876,8 @@ export function usePosIndex() {
       cart.value = []
       selectedAddons.value = []
       leftovers.value = []
+      additionalPax.value = 0
+      timeExtensionAmount.value = 0
       resetAddonModalState()
       resetDiscounts()
       resetPayments()
@@ -895,6 +976,9 @@ export function usePosIndex() {
 
     showPrintModal,
     isSeniorOrPWD,
+    seniorPax,
+    additionalPax,
+    timeExtensionAmount,
     voucherCode,
     voucherApplied,
     voucherDiscount,
@@ -987,6 +1071,13 @@ export function usePosIndex() {
     subtotal,
     discountAmount,
     totalPrice,
+    sessionPax,
+    totalPax,
+    perHeadRate,
+    additionalPaxAmount,
+    timeExtensionCharge,
+    seniorCount,
+    seniorDiscountAmount,
 
     checkoutSelectedTable,
 

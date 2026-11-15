@@ -23,6 +23,7 @@ export function useEmployeesIndex(props) {
   const showDTRModal = ref(false)
   const showOtModal = ref(false)
   const showOtDetailsModal = ref(false)
+  const editingOtId = ref(null)
 
   const isEditing = ref(false)
   const selectedEmployee = ref(null)
@@ -148,12 +149,27 @@ export function useEmployeesIndex(props) {
     let total = 0
 
     displayedSchedules.value.forEach((schedule) => {
-      const val = calculateUndertime(schedule.time_out, schedule.actual_time_out)
+      const val = calculateUndertime(schedule)
       const [h, m] = val.split(':').map(Number)
       total += h * 60 + m
     })
 
     return `${Math.floor(total / 60)}:${total % 60}`
+  })
+
+  const totalScheduledDays = computed(() => {
+    return displayedSchedules.value.filter(
+      (schedule) => schedule.status === 'Scheduled'
+    ).length
+  })
+
+  const totalDaysWithActual = computed(() => {
+    return displayedSchedules.value.filter(
+      (schedule) =>
+        schedule.status === 'Scheduled' &&
+        schedule.actual_time_in &&
+        schedule.actual_time_out
+    ).length
   })
 
   const resetEmployeeForm = () => {
@@ -434,13 +450,38 @@ export function useEmployeesIndex(props) {
     return `${Math.floor(lateMins / 60)}:${lateMins % 60}`
   }
 
-  const calculateUndertime = (scheduled, actual) => {
-    if (!scheduled || !actual) return '0:00'
+  const timeToMinutes = (value) => {
+    if (!value) return null
 
-    const [sh, sm] = scheduled.split(':').map(Number)
-    const [ah, am] = actual.split(':').map(Number)
+    const [h, m] = String(value).split(':').map(Number)
+    if (Number.isNaN(h) || Number.isNaN(m)) return null
 
-    const undertimeMins = sh * 60 + sm - (ah * 60 + am)
+    return h * 60 + m
+  }
+
+  const calculateUndertime = (schedule) => {
+    const schedIn = timeToMinutes(schedule.time_in)
+    const schedOut = timeToMinutes(schedule.time_out)
+    const actualIn = timeToMinutes(schedule.actual_time_in)
+    const actualOut = timeToMinutes(schedule.actual_time_out)
+
+    if (schedIn === null || schedOut === null || actualIn === null || actualOut === null) {
+      return '0:00'
+    }
+
+    // Overnight shifts (e.g. 21:00 -> 05:00) are rolled past midnight.
+    const shiftEnd = schedOut <= schedIn ? schedOut + 24 * 60 : schedOut
+    const workedEnd = actualOut <= actualIn ? actualOut + 24 * 60 : actualOut
+
+    const scheduledDuration = shiftEnd - schedIn
+    const workedDuration = workedEnd - actualIn
+    const lateMinutes = Math.max(0, actualIn - schedIn)
+
+    // Charged time is the shortfall between the scheduled shift length and the
+    // time actually worked. Early arrival is credited and time already counted
+    // as late is not charged again, so an employee who works the full duration
+    // (even if they clock in early) is not flagged as undertime.
+    const undertimeMins = Math.max(0, scheduledDuration - workedDuration - lateMinutes)
 
     if (undertimeMins <= 0) return '0:00'
     return `${Math.floor(undertimeMins / 60)}:${undertimeMins % 60}`
@@ -493,7 +534,7 @@ export function useEmployeesIndex(props) {
     if (
       schedule.status === 'Scheduled' &&
       calculateLate(schedule.time_in, schedule.actual_time_in) === '0:00' &&
-      calculateUndertime(schedule.time_out, schedule.actual_time_out) === '0:00' &&
+      calculateUndertime(schedule) === '0:00' &&
       schedule.actual_time_in &&
       schedule.actual_time_out
     ) {
@@ -510,7 +551,7 @@ export function useEmployeesIndex(props) {
   }
 
   const undertimeClass = (schedule) => {
-    return calculateUndertime(schedule.time_out, schedule.actual_time_out) !== '0:00'
+    return calculateUndertime(schedule) !== '0:00'
       ? 'text-orange-700'
       : 'text-gray-600'
   }
@@ -563,10 +604,36 @@ export function useEmployeesIndex(props) {
     window.open(url, '_blank')
   }
 
+  const formatDateOnly = (value) => {
+    if (!value) return ''
+
+    const match = String(value).match(/^(\d{4}-\d{2}-\d{2})/)
+    if (match) return match[1]
+
+    const parsed = new Date(value)
+    if (Number.isNaN(parsed.getTime())) return ''
+
+    const year = parsed.getUTCFullYear()
+    const month = String(parsed.getUTCMonth() + 1).padStart(2, '0')
+    const day = String(parsed.getUTCDate()).padStart(2, '0')
+
+    return `${year}-${month}-${day}`
+  }
+
+  const formatTimeForInput = (value) => {
+    if (!value) return ''
+
+    const match = String(value).match(/(\d{1,2}):(\d{2})/)
+    if (!match) return ''
+
+    return `${String(match[1]).padStart(2, '0')}:${match[2]}`
+  }
+
   const openOtModal = (schedule) => {
+    editingOtId.value = null
     otForm.value.employee_schedule_id = schedule.id
-    otForm.value.ot_date = schedule.schedule_date
-    otForm.value.start_time = schedule.time_out ?? ''
+    otForm.value.ot_date = formatDateOnly(schedule.schedule_date)
+    otForm.value.start_time = formatTimeForInput(schedule.time_out)
     otForm.value.end_time = ''
     otForm.value.type = 'regular_day'
     otForm.value.remarks = ''
@@ -574,22 +641,96 @@ export function useEmployeesIndex(props) {
     showOtModal.value = true
   }
 
+  const openEditOtModal = (ot) => {
+    if (!ot) return
+
+    editingOtId.value = ot.id
+    otForm.value.employee_schedule_id = ot.employee_schedule_id
+    otForm.value.ot_date = formatDateOnly(ot.ot_date)
+    otForm.value.start_time = formatTimeForInput(ot.start_time)
+    otForm.value.end_time = formatTimeForInput(ot.end_time)
+    otForm.value.type = ot.type ?? 'regular_day'
+    otForm.value.remarks = ot.remarks ?? ''
+    otForm.value.employee_id = ot.employee_id
+
+    showOtDetailsModal.value = false
+    showOtModal.value = true
+  }
+
   const closeOtModal = () => {
     showOtModal.value = false
+    editingOtId.value = null
     resetOtForm()
   }
 
+  // ─────────────────────────────────────────────────────────────────────────
+  // BACKUP (original) — kept for reference before the 2026-10-17 refactor.
+  // It returned 0.00 for overtime that crosses midnight (end <= start).
+  // ─────────────────────────────────────────────────────────────────────────
+  // const computeTotalHours = () => {
+  //   if (!otForm.value.start_time || !otForm.value.end_time) return '0.00'
+  //
+  //   const start = new Date(`1970-01-01T${otForm.value.start_time}`)
+  //   const end = new Date(`1970-01-01T${otForm.value.end_time}`)
+  //
+  //   const diffMs = end - start
+  //   const diffHrs = diffMs / (1000 * 60 * 60)
+  //
+  //   return diffHrs > 0 ? diffHrs.toFixed(2) : '0.00'
+  // }
+  // ─────────────────────────────────────────────────────────────────────────
+
   const computeTotalHours = () => {
-    if (!otForm.value.start_time || !otForm.value.end_time) return '0.00'
+    const startMins = timeToMinutes(otForm.value.start_time)
+    const endMins = timeToMinutes(otForm.value.end_time)
 
-    const start = new Date(`1970-01-01T${otForm.value.start_time}`)
-    const end = new Date(`1970-01-01T${otForm.value.end_time}`)
+    if (startMins === null || endMins === null || endMins === startMins) {
+      return '0.00'
+    }
 
-    const diffMs = end - start
-    const diffHrs = diffMs / (1000 * 60 * 60)
+    // Overnight OT (e.g. 22:30 -> 00:30) crosses midnight: the end time is
+    // treated as next day so the duration stays positive.
+    const totalMins = endMins < startMins
+      ? endMins + 24 * 60 - startMins
+      : endMins - startMins
 
-    return diffHrs > 0 ? diffHrs.toFixed(2) : '0.00'
+    return (totalMins / 60).toFixed(2)
   }
+
+  const otTotalHours = computed(() => computeTotalHours())
+
+  const otIsOvernight = computed(() => {
+    const startMins = timeToMinutes(otForm.value.start_time)
+    const endMins = timeToMinutes(otForm.value.end_time)
+
+    return startMins !== null && endMins !== null && endMins < startMins
+  })
+
+  const selectedOtIsOvernight = computed(() => {
+    const startMins = timeToMinutes(selectedOt.value?.start_time)
+    const endMins = timeToMinutes(selectedOt.value?.end_time)
+
+    return startMins !== null && endMins !== null && endMins < startMins
+  })
+
+  const selectedOtEndDateTime = computed(() => {
+    const ot = selectedOt.value
+    if (!ot) return ''
+
+    const baseDate = formatDateOnly(ot.ot_date)
+    const endTime = formatTimeForInput(ot.end_time)
+
+    if (!baseDate || !endTime) return ''
+
+    if (!selectedOtIsOvernight.value) {
+      return `${baseDate} ${endTime}`
+    }
+
+    const nextDay = new Date(`${baseDate}T00:00:00Z`)
+    nextDay.setUTCDate(nextDay.getUTCDate() + 1)
+
+    return `${nextDay.toISOString().slice(0, 10)} ${endTime}`
+  })
 
   const submitOt = async () => {
     const total_hours = computeTotalHours()
@@ -602,10 +743,17 @@ export function useEmployeesIndex(props) {
     try {
       isLoadingOT.value = true
 
-      const response = await axios.post(
-        route(`${prefix.value}.overtimes.store`),
-        payload
-      )
+      const isEdit = Boolean(editingOtId.value)
+
+      const response = isEdit
+        ? await axios.put(
+            route(`${prefix.value}.overtimes.update`, editingOtId.value),
+            payload
+          )
+        : await axios.post(
+            route(`${prefix.value}.overtimes.store`),
+            payload
+          )
 
       const overtime = response.data.overtime
 
@@ -615,6 +763,10 @@ export function useEmployeesIndex(props) {
 
       if (schedule) {
         schedule.overtime = { ...overtime }
+      }
+
+      if (selectedOt.value?.id === overtime.id) {
+        selectedOt.value = { ...overtime }
       }
 
       closeOtModal()
@@ -629,6 +781,15 @@ export function useEmployeesIndex(props) {
     selectedOt.value = ot
     showOtDetailsModal.value = true
   }
+
+  const selectedOtAmount = computed(() => {
+    if (!selectedOt.value) return 0
+
+    const dailyRate = Number(selectedEmployee.value?.latest_employment?.daily_rate || 0)
+    const hours = Number(selectedOt.value.total_hours || 0)
+
+    return (dailyRate / 8) * 1.25 * hours
+  })
 
   const closeOtDetailsModal = () => {
     selectedOt.value = null
@@ -657,6 +818,9 @@ export function useEmployeesIndex(props) {
     selectedEmployee,
     selectedEmployment,
     selectedOt,
+    selectedOtAmount,
+    selectedOtIsOvernight,
+    selectedOtEndDateTime,
 
     schedules,
     displayedSchedules,
@@ -675,6 +839,8 @@ export function useEmployeesIndex(props) {
 
     totalLate,
     totalUndertime,
+    totalScheduledDays,
+    totalDaysWithActual,
 
     createEmployee,
     editEmployee,
@@ -707,6 +873,7 @@ export function useEmployeesIndex(props) {
     calculateLate,
     calculateUndertime,
     formatDate,
+    formatDateOnly,
     rowClass,
     lateClass,
     undertimeClass,
@@ -714,8 +881,12 @@ export function useEmployeesIndex(props) {
     printPayroll,
 
     openOtModal,
+    openEditOtModal,
     closeOtModal,
     submitOt,
+    editingOtId,
+    otTotalHours,
+    otIsOvernight,
     viewOtDetails,
     closeOtDetailsModal,
 

@@ -493,6 +493,25 @@
 
                     <tbody>
                       <tr
+                        v-if="tableDetails.package_id || tableDetails.package_name"
+                        class="border-t bg-purple-50"
+                      >
+                        <td class="px-4 py-3">
+                          <i class="fa fa-box text-purple-500 mr-1"></i>
+                          Package: {{ tableDetails.package_name || '-' }}
+                        </td>
+                        <td class="px-4 py-3 text-center">
+                          {{ tableDetails.package_pax ?? 0 }}
+                        </td>
+                        <td class="px-4 py-3 text-right">
+                          ₱{{ Number(tableDetails.package_price ?? 0).toFixed(2) }}
+                        </td>
+                        <td class="px-4 py-3 text-right font-medium">
+                          ₱{{ Number(tableDetails.package_price ?? 0).toFixed(2) }}
+                        </td>
+                      </tr>
+
+                      <tr
                         v-for="head in tableDetails.head_counts"
                         :key="head.id"
                         class="border-t"
@@ -511,23 +530,25 @@
                         </td>
                       </tr>
 
-                      <tr v-if="!tableDetails.head_counts?.length">
+                      <tr v-if="!tableDetails.head_counts?.length && !tableDetails.package_id">
                         <td colspan="4" class="px-4 py-4 text-center text-gray-500">
                           No head count records found.
                         </td>
                       </tr>
                     </tbody>
 
-                    <tfoot v-if="tableDetails.head_counts?.length" class="bg-gray-50 border-t">
+                    <tfoot v-if="tableDetails.head_counts?.length || tableDetails.package_id" class="bg-gray-50 border-t">
                       <tr>
                         <td colspan="3" class="px-4 py-3 text-right font-bold text-gray-700">
                           Total Head Count Amount
                         </td>
                         <td class="px-4 py-3 text-right font-bold text-green-700">
                           ₱{{
-                            tableDetails.head_counts
-                              .reduce((sum, item) => sum + Number(item.subtotal ?? 0), 0)
-                              .toFixed(2)
+                            (
+                              tableDetails.head_counts
+                                .reduce((sum, item) => sum + Number(item.subtotal ?? 0), 0) +
+                              Number(tableDetails.package_price ?? 0)
+                            ).toFixed(2)
                           }}
                         </td>
                       </tr>

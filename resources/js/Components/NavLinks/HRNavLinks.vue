@@ -76,6 +76,13 @@ const toggle = () => {
               <span>Employees</span>
             </Link>
           </li>
+          <li>
+            <Link :href="route('hr.deduction-templates.index')"
+              class="pl-8 block px-2 py-1.5 rounded-base hover:bg-gray-200 flex items-center space-x-2">
+              <i class="fa fa-file-invoice"></i>
+              <span>Deduction Templates</span>
+            </Link>
+          </li>
           <!-- <li>
               <Link :href="route('hr.employees.overtimes')" class="pl-8 block px-2 py-1.5 rounded-base hover:bg-gray-200 flex items-center space-x-2">
                 <i class="fa fa-clock"></i>

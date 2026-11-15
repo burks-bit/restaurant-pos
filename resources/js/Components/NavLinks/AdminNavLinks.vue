@@ -44,6 +44,11 @@ const toggle = () => {
         <span>Reservations</span>
       </Link>
 
+      <Link :href="route('admin.packages.index')" class="flex items-center w-full px-3 py-2 rounded-base hover:bg-gray-200 hover:text-fg-brand space-x-2">
+        <i class="fa fa-box-open"></i>
+        <span>Packages</span>
+      </Link>
+
       <!-- POS -->
       <button
         @click="posOpen = !posOpen"

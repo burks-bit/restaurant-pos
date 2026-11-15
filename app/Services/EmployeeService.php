@@ -28,6 +28,7 @@ class EmployeeService
 
         $employees = Employee::with([
             'employmentDetails.documents',
+            'latestEmployment',
             'schedules',
             'user'
         ])->latest()->get();

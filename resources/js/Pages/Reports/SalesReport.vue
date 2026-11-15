@@ -237,6 +237,21 @@
           </div>
         </div>
 
+        <div class="mb-2 flex flex-wrap items-center gap-x-6 gap-y-1 rounded-lg bg-white px-4 py-2 text-sm shadow-sm">
+          <span class="text-gray-500">
+            Add'l Pax Charges:
+            <strong class="text-gray-800">₱{{ totalAdditionalPax.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }}</strong>
+          </span>
+          <span class="text-gray-500">
+            Time Extension:
+            <strong class="text-gray-800">₱{{ totalTimeExtension.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }}</strong>
+          </span>
+          <span class="text-gray-500">
+            SC/PWD Pax:
+            <strong class="text-gray-800">{{ totalSeniorPax }}</strong>
+          </span>
+        </div>
+
         <div class="max-h-[55vh] overflow-auto rounded-lg bg-white shadow">
           <table class="min-w-max table-auto border-collapse text-sm">
             <thead class="sticky top-0 z-10 bg-gray-100">
@@ -247,6 +262,9 @@
                 <th class="border px-2 py-2">Customer Name</th>
                 <th class="border px-2 py-2">No. of Pax</th>
                 <th class="border px-2 py-2">Amount</th>
+                <th class="border px-2 py-2 whitespace-nowrap">Add'l Pax</th>
+                <th class="border px-2 py-2 whitespace-nowrap">Time Ext</th>
+                <th class="border px-2 py-2 whitespace-nowrap">SC/PWD</th>
 
                 <!-- Dynamic payment method columns — no hardcoded GCash/Cash/Maya -->
                 <th
@@ -298,6 +316,12 @@
                   <!-- TABLE -->
                   <td class="border px-2 py-2 whitespace-nowrap">
                     {{ order.table_session?.table?.name || order.table_number || 'N/A' }}
+                    <span
+                      v-if="order.package_id || order.package_name"
+                      class="ml-1 inline-block rounded bg-purple-100 px-2 py-0.5 text-xs text-purple-600"
+                    >
+                      Package{{ order.package_name ? ': ' + order.package_name : '' }}
+                    </span>
                   </td>
 
                   <!-- CUSTOMER NAME -->
@@ -309,6 +333,23 @@
 
                 <!-- AMOUNT -->
                 <td class="border px-2 py-2 whitespace-nowrap">₱{{ Number(order.subtotal || 0).toFixed(2) }}</td>
+
+                <!-- POS ADJUSTMENTS -->
+                <td class="border px-2 py-2 whitespace-nowrap">
+                  {{ isReservationOrder(order) || isSingleOrder(order) || Number(order.additional_pax_amount || 0) <= 0
+                    ? '-'
+                    : '₱' + Number(order.additional_pax_amount).toFixed(2) }}
+                </td>
+                <td class="border px-2 py-2 whitespace-nowrap">
+                  {{ isReservationOrder(order) || isSingleOrder(order) || Number(order.time_extension_amount || 0) <= 0
+                    ? '-'
+                    : '₱' + Number(order.time_extension_amount).toFixed(2) }}
+                </td>
+                <td class="border px-2 py-2 text-center whitespace-nowrap">
+                  {{ isReservationOrder(order) || isSingleOrder(order) || Number(order.senior_pax || 0) <= 0
+                    ? '-'
+                    : order.senior_pax }}
+                </td>
 
                 <!-- DYNAMIC PAYMENT METHOD CELLS -->
                 <td
@@ -323,14 +364,19 @@
                 <td class="border px-2 py-2 whitespace-nowrap">₱{{ Number(order.subtotal || 0).toFixed(2) }}</td>
 
                 <!-- LESS DISCOUNT -->
-                <td class="border px-2 py-2 text-green-600 whitespace-nowrap">₱{{ Number(order.total_discount || 0).toFixed(2) }}</td>
+                <td class="border px-2 py-2 text-green-600 whitespace-nowrap">
+                  ₱{{ Number(order.total_discount || 0).toFixed(2) }}
+                  <span v-if="Number(order.senior_pax || 0) > 0" class="ml-1 text-xs text-gray-500">
+                    ({{ order.senior_pax }} SC/PWD)
+                  </span>
+                </td>
 
                 <!-- TOTAL NET SALES -->
                 <td class="border px-2 py-2 font-semibold whitespace-nowrap">₱{{ Number(order.total || 0).toFixed(2) }}</td>
               </tr>
 
               <tr v-if="orders.length === 0">
-                <td :colspan="6 + paymentMethodColumns.length + 3" class="py-6 text-center text-gray-400">No sales records found</td>
+                <td :colspan="9 + paymentMethodColumns.length + 3" class="py-6 text-center text-gray-400">No sales records found</td>
               </tr>
             </tbody>
           </table>
@@ -358,6 +404,9 @@ const {
   grossSales,
   totalCashierExpenses,
   netSales,
+  totalAdditionalPax,
+  totalTimeExtension,
+  totalSeniorPax,
   transactionCount,
   voidedCount,
   totalCashSales,

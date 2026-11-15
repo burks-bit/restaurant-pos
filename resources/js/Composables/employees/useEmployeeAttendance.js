@@ -111,6 +111,23 @@ export function useEmployeeAttendance() {
     resetOtForm()
   }
 
+  // ─────────────────────────────────────────────────────────────────────────
+  // BACKUP (original) — kept for reference before the 2026-10-17 refactor.
+  // It returned 0.00 for overtime that crosses midnight (end <= start).
+  // ─────────────────────────────────────────────────────────────────────────
+  // const computeTotalHours = () => {
+  //   if (!otForm.value.start_time || !otForm.value.end_time) return '0.00'
+  //
+  //   const start = new Date(`1970-01-01T${otForm.value.start_time}`)
+  //   const end = new Date(`1970-01-01T${otForm.value.end_time}`)
+  //
+  //   const diffMs = end - start
+  //   const diffHrs = diffMs / (1000 * 60 * 60)
+  //
+  //   return diffHrs > 0 ? diffHrs.toFixed(2) : '0.00'
+  // }
+  // ─────────────────────────────────────────────────────────────────────────
+
   const computeTotalHours = () => {
     if (!otForm.value.start_time || !otForm.value.end_time) return '0.00'
 
@@ -118,7 +135,10 @@ export function useEmployeeAttendance() {
     const end = new Date(`1970-01-01T${otForm.value.end_time}`)
 
     const diffMs = end - start
-    const diffHrs = diffMs / (1000 * 60 * 60)
+
+    // Overnight OT (e.g. 21:00 -> 00:00) crosses midnight, so add a day.
+    const totalMs = diffMs < 0 ? diffMs + 24 * 60 * 60 * 1000 : diffMs
+    const diffHrs = totalMs / (1000 * 60 * 60)
 
     return diffHrs > 0 ? diffHrs.toFixed(2) : '0.00'
   }

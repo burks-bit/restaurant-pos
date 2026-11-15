@@ -47,6 +47,24 @@ export function useSalesReport() {
       .reduce((sum, order) => sum + Number(order.total_discount || 0), 0)
   )
 
+  const totalAdditionalPax = computed(() =>
+    orders.value
+      .filter(order => order.status === 'paid')
+      .reduce((sum, order) => sum + Number(order.additional_pax_amount || 0), 0)
+  )
+
+  const totalTimeExtension = computed(() =>
+    orders.value
+      .filter(order => order.status === 'paid')
+      .reduce((sum, order) => sum + Number(order.time_extension_amount || 0), 0)
+  )
+
+  const totalSeniorPax = computed(() =>
+    orders.value
+      .filter(order => order.status === 'paid')
+      .reduce((sum, order) => sum + Number(order.senior_pax || 0), 0)
+  )
+
   const grossSales = computed(() => {
     return Object.values(payments.value).reduce((sum, amount) => sum + Number(amount || 0), 0)
   })
@@ -191,6 +209,9 @@ export function useSalesReport() {
     isLoading,
     grossSales,
     totalDiscounts,
+    totalAdditionalPax,
+    totalTimeExtension,
+    totalSeniorPax,
     totalCashierExpenses,
     netSales,
     transactionCount,

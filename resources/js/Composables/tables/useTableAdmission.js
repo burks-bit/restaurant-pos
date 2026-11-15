@@ -13,6 +13,24 @@ export function useTableAdmission() {
   // const incomingReservation = computed(() => page.props.incoming_reservation ?? null)
   const incomingReservation = ref(page.props.incoming_reservation ?? null)
 
+  // A reservation created in 'package' mode carries a package_id and has no
+  // head-pricing-rule breakdown. Admission should then show package details
+  // instead of the pricing-scheme/head-price selectors.
+  const isPackageReservation = computed(() => !!incomingReservation.value?.package_id)
+
+  const packageDetails = computed(() => {
+    const reservation = incomingReservation.value
+    if (!reservation?.package_id) return null
+
+    return {
+      name: reservation.package?.name ?? '—',
+      pax: reservation.package_pax ?? reservation.pax ?? 0,
+      price: Number(reservation.package_price ?? 0),
+      choices: reservation.package?.choices ?? null,
+      description: reservation.package?.description ?? null,
+    }
+  })
+
   const tableSearch = ref('')
 
   const toast = ref({
@@ -56,6 +74,7 @@ export function useTableAdmission() {
 
   const form = ref({
     customer_name: '',
+    contact_number: '',
     remarks: '',
     is_shared: false,
     pricing_scheme_id: defaultPricingSchemeId.value,
@@ -84,6 +103,43 @@ export function useTableAdmission() {
     }, {})
   }
 
+  // Human-readable label for the reservation fee payment method.
+  function paymentMethodLabel(value) {
+    if (value === null || value === undefined || value === '') return null
+
+    const map = {
+      '1': 'Cash',
+      '2': 'GCash',
+      '3': 'Maya',
+      '4': 'GrabPay',
+      '5': 'BDO',
+      '6': 'BPI',
+      '7': 'Metrobank',
+      '8': 'UnionBank',
+      '9': 'LandBank',
+      '10': 'Credit Card',
+      '11': 'Debit Card',
+      '12': 'Others',
+      cash: 'Cash',
+    }
+
+    return map[String(value)] ?? String(value)
+  }
+
+  // Declaration: downpayment / reservation fee + schedule details of the
+  // incoming reservation, shown on the admission details.
+  const reservationDetails = computed(() => {
+    const reservation = incomingReservation.value
+    if (!reservation) return null
+
+    return {
+      fee: Number(reservation.reservation_fee ?? 0),
+      method: paymentMethodLabel(reservation.fee_payment_method),
+      reference: reservation.fee_reference_no ?? null,
+      datetime: reservation.reservation_datetime ?? null,
+    }
+  })
+
   watch(
     activeHeadPrices,
     (newRules) => {
@@ -103,6 +159,7 @@ export function useTableAdmission() {
   watch(
     defaultPricingSchemeId,
     (newId) => {
+      if (isPackageReservation.value) return
       if (!form.value.pricing_scheme_id && newId) {
         form.value.pricing_scheme_id = newId
       }
@@ -123,12 +180,17 @@ export function useTableAdmission() {
       })
       form.value.head_counts = counts
       form.value.customer_name = reservation.name
+      form.value.contact_number = reservation.contact_number ?? ''
       form.value.remarks = reservation.remarks ?? ''
     },
     { immediate: true }
   )
 
   const totalPax = computed(() => {
+    if (isPackageReservation.value) {
+      return Number(incomingReservation.value?.package_pax ?? incomingReservation.value?.pax ?? 0)
+    }
+
     return activeHeadPrices.value.reduce((sum, head) => {
       const qty = Number(form.value.head_counts[head.id] ?? 0)
       return sum + qty
@@ -136,6 +198,10 @@ export function useTableAdmission() {
   })
 
   const subtotal = computed(() => {
+    if (isPackageReservation.value) {
+      return Number(incomingReservation.value?.package_price ?? 0)
+    }
+
     return activeHeadPrices.value.reduce((sum, head) => {
       const qty = Number(form.value.head_counts[head.id] ?? 0)
       const price = Number(head.price ?? 0)
@@ -219,6 +285,7 @@ export function useTableAdmission() {
   function resetForm() {
     form.value = {
       customer_name: '',
+      contact_number: '',
       remarks: '',
       is_shared: false,
       pricing_scheme_id: defaultPricingSchemeId.value,
@@ -258,7 +325,7 @@ export function useTableAdmission() {
       return
     }
 
-    if (!form.value.pricing_scheme_id) {
+    if (!isPackageReservation.value && !form.value.pricing_scheme_id) {
       errors.value.pricing_scheme_id = 'Please select a pricing scheme.'
       return
     }
@@ -268,7 +335,7 @@ export function useTableAdmission() {
       return
     }
 
-    if (totalPax.value <= 0) {
+    if (!isPackageReservation.value && totalPax.value <= 0) {
       errors.value.head_counts = 'Please enter at least one pax.'
       return
     }
@@ -293,17 +360,27 @@ export function useTableAdmission() {
         }
       })
 
+      const payload = {
+        pricing_scheme_id: isPackageReservation.value ? null : form.value.pricing_scheme_id,
+        guests_count: totalPax.value,
+        customer_name: form.value.customer_name,
+        contact_number: form.value.contact_number,
+        remarks: form.value.remarks,
+        is_shared: form.value.is_shared ? 1 : 0,
+        reservation_id: incomingReservation.value?.id ?? null,
+      }
+
+      if (isPackageReservation.value) {
+        payload.package_id = incomingReservation.value.package_id
+        payload.package_pax = incomingReservation.value.package_pax
+        payload.package_price = incomingReservation.value.package_price
+      } else {
+        payload.head_rule_counts = ruleCounts
+      }
+
       const response = await axios.post(
         route(`${prefix.value}.table_occupancies.assign`, selectedTable.value.id),
-        {
-          pricing_scheme_id: form.value.pricing_scheme_id,
-          guests_count: totalPax.value,
-          head_rule_counts: ruleCounts,
-          customer_name: form.value.customer_name,
-          remarks: form.value.remarks,
-          is_shared: form.value.is_shared ? 1 : 0,
-          reservation_id:    incomingReservation.value?.id ?? null,
-        }
+        payload
       )
       
       resetForm()
@@ -350,6 +427,9 @@ export function useTableAdmission() {
     formatMoney,
     lineTotal,
     incomingReservation,
+    isPackageReservation,
+    packageDetails,
+    reservationDetails,
     formatDateTime
   }
 }

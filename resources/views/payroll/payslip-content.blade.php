@@ -4,7 +4,9 @@
         ['show_acknowledgement' => true],
     ];
 
-    $basicPay      = (float) ($item->basic_pay ?? 0); 
+    $dailyRate     = (float) ($item->employee->latestEmployment?->daily_rate ?? 0);
+    $days          = (float) ($item->days ?? 0);
+    $basicPay      = $dailyRate * $days;
     $earningsRows    = $item->earnings->sum(fn($e) => (float) $e->amount);
     $computedTotal   = $basicPay + $earningsRows;
     $totalDeductions = (float) ($item->total_deductions ?? 0);
@@ -59,7 +61,7 @@
             </td>
             <td style="border: none; text-align: right; font-size: 12px;" valign="top">
                 <strong>Rate per Day:</strong>
-                ₱ {{ number_format((float)($item->employee->latestEmployment?->daily_rate ?? 0), 2) }}
+                ₱ {{ number_format($dailyRate, 2) }}
             </td>
         </tr>
     </table>
@@ -80,7 +82,7 @@
                     <tr>
                         <td style="border: 1px solid #ccc; font-size: 12px;">Basic Pay</td>
                         <td style="border: 1px solid #ccc; text-align: right; font-size: 12px;">
-                            ₱ {{ number_format($item->basic_pay, 2) }}
+                            ₱ {{ number_format($basicPay, 2) }}
                         </td>
                     </tr>
 

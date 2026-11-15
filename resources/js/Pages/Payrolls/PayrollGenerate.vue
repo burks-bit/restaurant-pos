@@ -92,6 +92,7 @@
                   <th class="border px-3 py-2 text-center">Days</th>
                   <th class="border px-3 py-2 text-center">Hours</th>
                   <th class="border px-3 py-2 text-center">Late</th>
+                  <th class="border px-3 py-2 text-center">Late (₱)</th>
                   <th class="border px-3 py-2 text-center">Undertime</th>
                   <th class="border px-3 py-2 text-center">Overtime</th>
                   <th class="border px-3 py-2 text-center">Gross Pay</th>
@@ -100,7 +101,7 @@
 
               <tbody>
                 <tr v-if="employees.length === 0">
-                  <td colspan="7" class="text-center py-6 text-gray-400">
+                  <td colspan="8" class="text-center py-6 text-gray-400">
                     No payroll records found.
                   </td>
                 </tr>
@@ -133,6 +134,9 @@
                   <td class="border px-3 py-2 text-center text-red-600">
                     {{ formatMinutes(emp.total_late) }}
                   </td>
+                  <td class="border px-3 py-2 text-center text-red-600 font-medium">
+                    ₱ {{ lateAmount(emp).toFixed(2) }}
+                  </td>
                   <td class="border px-3 py-2 text-center text-orange-600">
                     {{ formatMinutes(emp.total_undertime) }}
                   </td>
@@ -147,7 +151,7 @@
 
               <tfoot v-if="employees.length > 0" class="bg-gray-100">
                 <tr class="font-bold">
-                  <td colspan="7" class="border px-3 py-2 text-right">
+                  <td colspan="8" class="border px-3 py-2 text-right">
                     Grand Total
                   </td>
                   <td class="border px-3 py-2 text-center">
@@ -173,6 +177,7 @@ const {
   employees,
   isLoading,
   grandTotal,
+  lateAmount,
   getSchedules,
   postPayroll,
   branches,

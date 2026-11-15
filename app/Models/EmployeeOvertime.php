@@ -19,7 +19,7 @@ class EmployeeOvertime extends Model
     ];
 
     protected $casts = [
-        'ot_date' => 'date',
+        'ot_date' => 'date:Y-m-d',
         'start_time' => 'datetime:H:i',
         'end_time' => 'datetime:H:i',
         'total_hours' => 'decimal:2',

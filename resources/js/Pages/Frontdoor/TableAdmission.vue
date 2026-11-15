@@ -177,7 +177,72 @@
                   </label>
                 </div>
 
-                <div>
+                <!-- Package reservation: show package details instead of scheme selectors -->
+                <div
+                  v-if="isPackageReservation && packageDetails"
+                  class="rounded-xl border border-blue-100 bg-blue-50 p-4"
+                >
+                  <div class="flex items-center gap-2">
+                    <i class="fa fa-box-open text-blue-700"></i>
+                    <h3 class="text-sm font-semibold text-blue-900">Package Details</h3>
+                  </div>
+
+                  <div class="mt-3 space-y-2 text-sm">
+                    <div class="flex justify-between gap-3">
+                      <span class="text-gray-600">Package</span>
+                      <span class="font-medium text-gray-900">{{ packageDetails.name }}</span>
+                    </div>
+                    <div class="flex justify-between gap-3">
+                      <span class="text-gray-600">Pax</span>
+                      <span class="font-medium text-gray-900">{{ packageDetails.pax }}</span>
+                    </div>
+                    <div class="flex justify-between gap-3">
+                      <span class="text-gray-600">Price</span>
+                      <span class="font-semibold text-gray-900">₱{{ formatMoney(packageDetails.price) }}</span>
+                    </div>
+                    <div v-if="packageDetails.choices" class="flex justify-between gap-3">
+                      <span class="text-gray-600">Choices</span>
+                      <span class="font-medium text-gray-900 text-right">{{ packageDetails.choices }}</span>
+                    </div>
+                    <div v-if="packageDetails.description" class="pt-1 text-xs text-gray-600">
+                      {{ packageDetails.description }}
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Reservation fee / downpayment + schedule (package mode) -->
+                <div
+                  v-if="isPackageReservation && reservationDetails"
+                  class="rounded-xl border border-amber-100 bg-amber-50 p-4"
+                >
+                  <div class="flex items-center gap-2">
+                    <i class="fa fa-money-bill-wave text-amber-700"></i>
+                    <h3 class="text-sm font-semibold text-amber-900">Downpayment / Reservation Fee</h3>
+                  </div>
+
+                  <div class="mt-3 space-y-2 text-sm">
+                    <div class="flex justify-between gap-3">
+                      <span class="text-gray-600">Schedule</span>
+                      <span class="font-medium text-gray-900">
+                        {{ reservationDetails.datetime ? formatDateTime(reservationDetails.datetime) : '-' }}
+                      </span>
+                    </div>
+                    <div class="flex justify-between gap-3">
+                      <span class="text-gray-600">Reservation Fee</span>
+                      <span class="font-semibold text-gray-900">₱{{ formatMoney(reservationDetails.fee) }}</span>
+                    </div>
+                    <div class="flex justify-between gap-3">
+                      <span class="text-gray-600">Payment Method</span>
+                      <span class="font-medium text-gray-900">{{ reservationDetails.method ?? '-' }}</span>
+                    </div>
+                    <div v-if="reservationDetails.reference" class="flex justify-between gap-3">
+                      <span class="text-gray-600">Reference No.</span>
+                      <span class="font-medium text-gray-900">{{ reservationDetails.reference }}</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div v-if="!isPackageReservation">
                   <label class="mb-1 block text-sm font-medium text-gray-700">
                     Pricing Scheme <span class="text-red-500">*</span>
                   </label>
@@ -228,6 +293,21 @@
 
                 <div>
                   <label class="mb-1 block text-sm font-medium text-gray-700">
+                    Contact Number
+                  </label>
+                  <input
+                    v-model="form.contact_number"
+                    type="text"
+                    class="w-full rounded-xl border-gray-300 text-sm shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                    placeholder="Enter contact number"
+                  />
+                  <p v-if="errors.contact_number" class="mt-1 text-xs text-red-500">
+                    {{ errors.contact_number }}
+                  </p>
+                </div>
+
+                <div>
+                  <label class="mb-1 block text-sm font-medium text-gray-700">
                     Remarks
                   </label>
                   <textarea
@@ -241,7 +321,7 @@
                   </p>
                 </div>
 
-                <div class="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3">
+                <div v-if="!isPackageReservation" class="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3">
                   <label class="flex cursor-pointer items-center justify-between gap-3">
                     <div>
                       <div class="text-sm font-medium text-gray-800">Shared Table</div>
@@ -258,7 +338,7 @@
                   </label>
                 </div>
 
-                <div>
+                <div v-if="!isPackageReservation">
                   <div class="mb-2 flex items-center justify-between">
                     <label class="block text-sm font-medium text-gray-700">
                       Head Prices
@@ -327,10 +407,17 @@
                       </span>
                     </div>
 
-                    <div class="flex justify-between">
+                    <div v-if="!isPackageReservation" class="flex justify-between">
                       <span class="text-gray-600">Pricing Scheme</span>
                       <span class="font-medium text-gray-900">
                         {{ selectedPricingScheme ? selectedPricingScheme.name : '-' }}
+                      </span>
+                    </div>
+
+                    <div v-if="isPackageReservation" class="flex justify-between">
+                      <span class="text-gray-600">Package</span>
+                      <span class="font-medium text-gray-900">
+                        {{ packageDetails ? packageDetails.name : '-' }}
                       </span>
                     </div>
 
@@ -428,6 +515,9 @@ const {
   lineTotal,
   
   incomingReservation,
+  isPackageReservation,
+  packageDetails,
+  reservationDetails,
   formatDateTime
 } = useTableAdmission()
 </script>

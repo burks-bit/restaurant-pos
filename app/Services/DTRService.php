@@ -208,6 +208,58 @@ class DTRService
     //     ]);
     // }
     
+    // ─────────────────────────────────────────────────────────────────────────
+    // BACKUP (original) — kept for reference before the 2026-10-17 refactor.
+    // It matched a log to $date if EITHER schedule_date OR shift_end_date
+    // matched, which included overnight shifts that started the previous day.
+    // ─────────────────────────────────────────────────────────────────────────
+    // public function getAllEmployeeDailyLogs(?string $date = null)
+    // {
+    //     $date = $date ?: Carbon::now()->toDateString();
+    //     Log::info('Fetching employee daily logs for date: ' . $date);
+    //
+    //     $logs = DB::table('employee_schedules as es')
+    //         ->join('employees as e', 'e.id', '=', 'es.employee_id')
+    //         ->select([
+    //             'es.id',
+    //             'es.employee_id',
+    //             'e.employee_code',
+    //             'e.first_name',
+    //             'e.last_name',
+    //             'es.time_in',
+    //             'es.time_out',
+    //             'es.actual_time_in',
+    //             'es.actual_time_out',
+    //             'es.time_in_photo',
+    //             'es.time_out_photo',
+    //             'es.schedule_date',
+    //             'es.shift_end_date',
+    //         ])
+    //         ->when($date, function ($query) use ($date) {
+    //             // Overnight shifts can end the next calendar day, so a log
+    //             // "belongs" to $date if either schedule_date or shift_end_date matches.
+    //             $query->where(function ($q) use ($date) {
+    //                 $q->whereDate('es.schedule_date', $date)
+    //                   ->orWhereDate('es.shift_end_date', $date);
+    //             });
+    //         })
+    //         ->where(function ($query) {
+    //             $query->where('es.status', '!=', 'Day Off')
+    //                 ->where('es.status', '!=', 'Absent')
+    //                 ->where('es.status', '!=', 'Leave');
+    //         })
+    //         ->orderByDesc('es.actual_time_in')
+    //         ->get();
+    //
+    //     return Inertia::render('Employees/Logs', [
+    //         'logs' => $logs,
+    //         'filters' => [
+    //             'date' => $date,
+    //         ],
+    //     ]);
+    // }
+    // ─────────────────────────────────────────────────────────────────────────
+
     public function getAllEmployeeDailyLogs(?string $date = null)
     {
         $date = $date ?: Carbon::now()->toDateString();
@@ -231,12 +283,8 @@ class DTRService
                 'es.shift_end_date',
             ])
             ->when($date, function ($query) use ($date) {
-                // Overnight shifts can end the next calendar day, so a log
-                // "belongs" to $date if either schedule_date or shift_end_date matches.
-                $query->where(function ($q) use ($date) {
-                    $q->whereDate('es.schedule_date', $date)
-                      ->orWhereDate('es.shift_end_date', $date);
-                });
+                // Only show logs whose schedule actually falls on the selected date.
+                $query->whereDate('es.schedule_date', $date);
             })
             ->where(function ($query) {
                 $query->where('es.status', '!=', 'Day Off')
@@ -254,20 +302,67 @@ class DTRService
         ]);
     }
 
+    // ─────────────────────────────────────────────────────────────────────────
+    // BACKUP (original) — kept for reference before the 2026-10-17 refactor.
+    // It rejected overtime that crosses midnight because of `after:start_time`
+    // (e.g. 21:00 -> 00:00), so overnight OT could not be filed.
+    // ─────────────────────────────────────────────────────────────────────────
+    // public function saveOvertime(Request $request)
+    // {
+    //     $request->validate([
+    //         'employee_schedule_id' => 'required|exists:employee_schedules,id',
+    //         'ot_date' => 'required|date',
+    //         'start_time' => 'required',
+    //         'end_time' => 'required|after:start_time',
+    //         'type' => 'required',
+    //     ]);
+    //
+    //     $start = Carbon::parse($request->start_time);
+    //     $end = Carbon::parse($request->end_time);
+    //
+    //     $totalHours = $start->floatDiffInHours($end);
+    //
+    //     $overtime = EmployeeOvertime::create([
+    //         'employee_id' => $request->employee_id,
+    //         'employee_schedule_id' => $request->employee_schedule_id,
+    //         'ot_date' => $request->ot_date,
+    //         'start_time' => $request->start_time,
+    //         'end_time' => $request->end_time,
+    //         'total_hours' => $totalHours,
+    //         'type' => $request->type,
+    //         'status' => 'approved',
+    //         'remarks' => $request->remarks,
+    //     ]);
+    //
+    //     return response()->json([
+    //         'message' => 'Overtime filed successfully.',
+    //         'overtime' => $overtime
+    //     ]);
+    // }
+    // ─────────────────────────────────────────────────────────────────────────
+
     public function saveOvertime(Request $request)
     {
         $request->validate([
             'employee_schedule_id' => 'required|exists:employee_schedules,id',
             'ot_date' => 'required|date',
             'start_time' => 'required',
-            'end_time' => 'required|after:start_time',
+            // Overnight OT is allowed (e.g. 21:00 -> 00:00), so we only require
+            // that the end time differs from the start time.
+            'end_time' => 'required|different:start_time',
             'type' => 'required',
         ]);
 
-        $start = Carbon::parse($request->start_time);
-        $end = Carbon::parse($request->end_time);
+        $totalHours = $this->resolveOvertimeHours($request->start_time, $request->end_time);
 
-        $totalHours = $start->floatDiffInHours($end);
+        if ($totalHours === null) {
+            return response()->json([
+                'message' => 'Invalid overtime time range.',
+                'errors' => [
+                    'end_time' => ['The end time must be different from the start time.'],
+                ],
+            ], 422);
+        }
 
         $overtime = EmployeeOvertime::create([
             'employee_id' => $request->employee_id,
@@ -287,6 +382,79 @@ class DTRService
         ]);
     }
 
+    public function updateOvertime(Request $request, $id)
+    {
+        $request->validate([
+            'ot_date' => 'required|date',
+            'start_time' => 'required',
+            // Overnight OT is allowed (e.g. 22:30 -> 00:30), so we only require
+            // that the end time differs from the start time.
+            'end_time' => 'required|different:start_time',
+            'type' => 'required',
+        ]);
+
+        $overtime = EmployeeOvertime::findOrFail($id);
+
+        $totalHours = $this->resolveOvertimeHours($request->start_time, $request->end_time);
+
+        if ($totalHours === null) {
+            return response()->json([
+                'message' => 'Invalid overtime time range.',
+                'errors' => [
+                    'end_time' => ['The end time must be different from the start time.'],
+                ],
+            ], 422);
+        }
+
+        $overtime->update([
+            'ot_date' => $request->ot_date,
+            'start_time' => $request->start_time,
+            'end_time' => $request->end_time,
+            'total_hours' => $totalHours,
+            'type' => $request->type,
+            'remarks' => $request->remarks,
+        ]);
+
+        return response()->json([
+            'message' => 'Overtime updated successfully.',
+            'overtime' => $overtime->fresh(),
+        ]);
+    }
+
+    private function resolveOvertimeHours($startTime, $endTime): ?float
+    {
+        $startMinutes = $this->timeToMinutes($startTime);
+        $endMinutes = $this->timeToMinutes($endTime);
+
+        if ($startMinutes === null || $endMinutes === null || $startMinutes === $endMinutes) {
+            return null;
+        }
+
+        // If the OT crosses midnight, treat the end time as next day so the
+        // duration stays positive (e.g. 22:30 -> 00:30 = 2.00 hours).
+        $totalMinutes = $endMinutes < $startMinutes
+            ? $endMinutes + 24 * 60 - $startMinutes
+            : $endMinutes - $startMinutes;
+
+        return round($totalMinutes / 60, 2);
+    }
+
+    private function timeToMinutes($value): ?int
+    {
+        if (!preg_match('/^(\d{1,2}):(\d{2})/', (string) $value, $matches)) {
+            return null;
+        }
+
+        $hours = (int) $matches[1];
+        $minutes = (int) $matches[2];
+
+        if ($hours > 23 || $minutes > 59) {
+            return null;
+        }
+
+        return ($hours * 60) + $minutes;
+    }
+
     public function filterAllEmployeeOvertime(Request $request)
     {
         $search = $request->query('search');
@@ -295,10 +463,10 @@ class DTRService
 
         $employees = Employee::with(['overtimes' => function ($query) use ($startDate, $endDate) {
             if ($startDate) {
-                $query->whereDate('created_at', '>=', $startDate);
+                $query->whereDate('ot_date', '>=', $startDate);
             }
             if ($endDate) {
-                $query->whereDate('created_at', '<=', $endDate);
+                $query->whereDate('ot_date', '<=', $endDate);
             }
         }])
         ->when($search, function ($query, $search) {
@@ -340,7 +508,7 @@ class DTRService
         $employees = Employee::with([
             'overtimes' => function ($q) use ($start, $end) {
                 $q->where('status', 'approved')
-                ->whereBetween('created_at', [$start, $end]);
+                ->whereBetween('ot_date', [$start, $end]);
             },
             'latestEmployment', // <-- replace 'employmentDetails'
             'schedules' => function ($q) use ($start, $end) {
@@ -490,6 +658,11 @@ class DTRService
             $overtimePay    = $overtimeHours * $overtimeRate;
             $totalEarnings += $overtimePay;
 
+            // Automatically compute the monetary value of the employee's lates
+            // (hours late * hourly rate) so the payroll generator page can show
+            // and post it as a payroll deduction.
+            $lateAmount = ($totalLate / 60) * $hourlyRate;
+
             $payrollData[] = [
                 'id'             => $emp->id,
                 'employee_code'  => $emp->employee_code,
@@ -501,6 +674,9 @@ class DTRService
                 'total_undertime'=> $totalUndertime,
                 'overtime_hours' => round($overtimeHours, 2),
                 'total_earnings' => round($totalEarnings, 2),
+                'daily_rate'     => round($dailyRate, 2),
+                'hourly_rate'    => round($hourlyRate, 2),
+                'late_amount'    => round($lateAmount, 2),
             ];
         }
 

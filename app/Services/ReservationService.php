@@ -6,6 +6,7 @@ use Illuminate\Http\Request;
 use Inertia\Inertia;
 use App\Models\Reservation;
 use App\Models\Order;
+use App\Models\Package;
 use App\Models\OrderPayment;
 use App\Models\PaymentMethod;
 use App\Models\PricingScheme;
@@ -74,6 +75,7 @@ class ReservationService
             $reservationsQuery = Reservation::with([
                     'reservationPax.headPricingRule',
                     'pricingScheme',
+                    'package',
                     'order.user',
                 ])
                 ->orderBy('created_at', 'desc');
@@ -97,6 +99,7 @@ class ReservationService
                 'reservations'    => $reservations,
                 'pricing_schemes' => PricingScheme::where('is_active', true)->get(),
                 'pricing_rules'   => HeadPricingRule::where('is_active', true)->get(),
+                'packages'        => Package::with('prices')->where('is_active', true)->orderBy('name')->get(),
                 'shifts'          => Shift::all(),
                 'cashiersOnDuty'  => $mapped,
                 'filters'         => ['start_date' => $startDate, 'end_date' => $endDate],
@@ -111,33 +114,19 @@ class ReservationService
     public function store(Request $request)
     {
         Log::info('ReservationService@store: Validated data', $request->all());
-        $data = $request->validate([
-            'name'                   => 'required|string|max:191',
-            'pricing_scheme_id'      => 'required|exists:pricing_schemes,id',
-            'reservation_datetime'   => 'required|date',
-            'contact_number'         => 'nullable|string|max:191',
-            'remarks'                => 'nullable|string',
-            'status'                 => 'in:pending,confirmed,seated,cancelled',
-            'reservation_fee'        => 'nullable|numeric|min:0',
-            'fee_payment_method'     => 'nullable|string|max:191',
-            'fee_reference_no'       => 'nullable|string|max:191',
-            'pax_breakdown'          => 'required|array|min:1',
-            'pax_breakdown.*.head_pricing_rule_id' => 'required|exists:head_pricing_rules,id',
-            'pax_breakdown.*.qty'            => 'required|integer|min:0',
-            'pax_breakdown.*.price_snapshot' => 'required|numeric|min:0',
-            'pax_breakdown.*.subtotal'       => 'required|numeric|min:0',
-            'pax'                    => 'required|integer|min:1',
-            'shift_id'               => 'required|exists:shifts,id',
-            // 'cashier_employee_id'    => 'nullable|exists:employees,id',
-            'cashier_user_id'        => 'nullable|exists:users,id',
-        ]);
 
-        DB::transaction(function () use ($data) {
+        // Reservation mode: 'scheme' (head pricing rules) or 'package'.
+        $mode = $request->input('mode', 'scheme');
+        $data = $request->validate($this->rulesForMode($mode, true));
+
+        DB::transaction(function () use ($data, $mode) {
+            $isPackage = $mode === 'package';
+
             // --- 1. Save Reservation ---
             $reservation = Reservation::create([
                 'name'                 => $data['name'],
-                'pricing_scheme_id'    => $data['pricing_scheme_id'],
-                'pax'                  => $data['pax'],
+                'pricing_scheme_id'    => $isPackage ? null : $data['pricing_scheme_id'],
+                'pax'                  => $isPackage ? $data['package_pax'] : $data['pax'],
                 'reservation_datetime' => $data['reservation_datetime'],
                 'contact_number'       => $data['contact_number'],
                 'remarks'              => $data['remarks'] ?? null,
@@ -146,16 +135,22 @@ class ReservationService
                 'fee_payment_method'   => $data['fee_payment_method'] ?? null,
                 'fee_reference_no'     => $data['fee_reference_no'] ?? null,
                 'shift_id'             => $data['shift_id'] ?? null,
+                'package_id'           => $isPackage ? $data['package_id'] : null,
+                'package_pax'          => $isPackage ? $data['package_pax'] : null,
+                'package_price'        => $isPackage ? ($data['package_price'] ?? null) : null,
             ]);
 
-            foreach ($data['pax_breakdown'] as $row) {
-                if ($row['qty'] > 0) {
-                    $reservation->reservationPax()->create([
-                        'head_pricing_rule_id' => $row['head_pricing_rule_id'],
-                        'qty'                  => $row['qty'],
-                        'price_snapshot'       => $row['price_snapshot'],
-                        'subtotal'             => $row['subtotal'],
-                    ]);
+            // Pax breakdown only applies to pricing-scheme reservations.
+            if (! $isPackage) {
+                foreach ($data['pax_breakdown'] as $row) {
+                    if ($row['qty'] > 0) {
+                        $reservation->reservationPax()->create([
+                            'head_pricing_rule_id' => $row['head_pricing_rule_id'],
+                            'qty'                  => $row['qty'],
+                            'price_snapshot'       => $row['price_snapshot'],
+                            'subtotal'             => $row['subtotal'],
+                        ]);
+                    }
                 }
             }
 
@@ -177,8 +172,8 @@ class ReservationService
 
             $orderNo    = $prefix . str_pad($nextSeq, 4, '0', STR_PAD_LEFT);
 
-            // --- 3. Compute totals from pax_breakdown ---
-            $subtotal = collect($data['pax_breakdown'])->sum('subtotal');
+            // --- 3. Compute totals from pax_breakdown (scheme mode only) ---
+            $subtotal = collect($data['pax_breakdown'] ?? [])->sum('subtotal');
 
             $now = Carbon::now();
             $time = $now->format('H:i:s');
@@ -256,29 +251,16 @@ class ReservationService
     {
         Log::info('ReservationService@update: Validated data', $request->all());
 
-        $data = $request->validate([
-            'name'                   => 'required|string|max:191',
-            'pricing_scheme_id'      => 'required|exists:pricing_schemes,id',
-            'reservation_datetime'   => 'required|date',
-            'contact_number'         => 'nullable|string|max:191',
-            'remarks'                => 'nullable|string',
-            'status'                 => 'in:pending,confirmed,seated,cancelled',
-            'reservation_fee'        => 'nullable|numeric|min:0',
-            'fee_payment_method'     => 'nullable|string|max:191',
-            'fee_reference_no'       => 'nullable|string|max:191',
-            'pax_breakdown'          => 'required|array|min:1',
-            'pax_breakdown.*.head_pricing_rule_id' => 'required|exists:head_pricing_rules,id',
-            'pax_breakdown.*.qty'            => 'required|integer|min:0',
-            'pax_breakdown.*.price_snapshot' => 'required|numeric|min:0',
-            'pax_breakdown.*.subtotal'       => 'required|numeric|min:0',
-            'pax'                    => 'required|integer|min:1',
-        ]);
- 
-        DB::transaction(function () use ($data, $reservation) {
-            $reservation->update([
+        $mode = $request->input('mode', 'scheme');
+        $data = $request->validate($this->rulesForMode($mode, false));
+
+        DB::transaction(function () use ($data, $mode, $reservation) {
+            $isPackage = $mode === 'package';
+
+            $payload = [
                 'name'                 => $data['name'],
-                'pricing_scheme_id'    => $data['pricing_scheme_id'],
-                'pax'                  => $data['pax'],
+                'pricing_scheme_id'    => $isPackage ? null : $data['pricing_scheme_id'],
+                'pax'                  => $isPackage ? $data['package_pax'] : $data['pax'],
                 'reservation_datetime' => $data['reservation_datetime'],
                 'contact_number'       => $data['contact_number'],
                 'remarks'              => $data['remarks'] ?? null,
@@ -286,23 +268,75 @@ class ReservationService
                 'reservation_fee'      => $data['reservation_fee'] ?? 0,
                 'fee_payment_method'   => $data['fee_payment_method'] ?? null,
                 'fee_reference_no'     => $data['fee_reference_no'] ?? null,
-            ]);
- 
+                'package_id'           => $isPackage ? $data['package_id'] : null,
+                'package_pax'          => $isPackage ? $data['package_pax'] : null,
+                'package_price'        => $isPackage ? ($data['package_price'] ?? null) : null,
+            ];
+
+            // Package reservations also persist the selected shift.
+            if ($isPackage && array_key_exists('shift_id', $data)) {
+                $payload['shift_id'] = $data['shift_id'];
+            }
+
+            $reservation->update($payload);
+
             $reservation->reservationPax()->delete();
- 
-            foreach ($data['pax_breakdown'] as $row) {
-                if ($row['qty'] > 0) {
-                    $reservation->reservationPax()->create([
-                        'head_pricing_rule_id' => $row['head_pricing_rule_id'],
-                        'qty'                  => $row['qty'],
-                        'price_snapshot'       => $row['price_snapshot'],
-                        'subtotal'             => $row['subtotal'],
-                    ]);
+
+            if (! $isPackage) {
+                foreach ($data['pax_breakdown'] as $row) {
+                    if ($row['qty'] > 0) {
+                        $reservation->reservationPax()->create([
+                            'head_pricing_rule_id' => $row['head_pricing_rule_id'],
+                            'qty'                  => $row['qty'],
+                            'price_snapshot'       => $row['price_snapshot'],
+                            'subtotal'             => $row['subtotal'],
+                        ]);
+                    }
                 }
             }
         });
- 
+
         return redirect()->back()->with('success', 'Reservation updated.');
+    }
+
+    /**
+     * Validation rules that depend on the reservation mode.
+     * 'package' -> requires a selected package variant, no pax breakdown.
+     * 'scheme'  -> original head-pricing-rule behaviour.
+     */
+    private function rulesForMode(string $mode, bool $requireShift): array
+    {
+        $base = [
+            'name'                 => 'required|string|max:191',
+            'reservation_datetime' => 'required|date',
+            'contact_number'       => 'nullable|string|max:191',
+            'remarks'              => 'nullable|string',
+            'status'               => 'in:pending,confirmed,seated,cancelled',
+            'reservation_fee'      => 'nullable|numeric|min:0',
+            'fee_payment_method'   => 'nullable|string|max:191',
+            'fee_reference_no'     => 'nullable|string|max:191',
+            'shift_id'             => ($requireShift ? 'required' : 'nullable') . '|exists:shifts,id',
+            'cashier_user_id'      => 'nullable|exists:users,id',
+        ];
+
+        if ($mode === 'package') {
+            return array_merge($base, [
+                'package_id'    => 'required|exists:packages,id',
+                'package_pax'   => 'required|integer|min:1',
+                'package_price' => 'nullable|numeric|min:0',
+                'pax'           => 'nullable|integer|min:1',
+            ]);
+        }
+
+        return array_merge($base, [
+            'pricing_scheme_id'      => 'required|exists:pricing_schemes,id',
+            'pax_breakdown'          => 'required|array|min:1',
+            'pax_breakdown.*.head_pricing_rule_id' => 'required|exists:head_pricing_rules,id',
+            'pax_breakdown.*.qty'            => 'required|integer|min:0',
+            'pax_breakdown.*.price_snapshot' => 'required|numeric|min:0',
+            'pax_breakdown.*.subtotal'       => 'required|numeric|min:0',
+            'pax'                    => 'required|integer|min:1',
+        ]);
     }
 
     public function destroy(Reservation $reservation)

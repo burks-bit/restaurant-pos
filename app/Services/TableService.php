@@ -8,6 +8,7 @@ use App\Models\Table;
 use App\Models\TableSession;
 use App\Models\HeadPricingRule;
 use App\Models\PricingScheme;
+use App\Models\Package;
 use App\Models\Reservation;
 use App\Models\User;
 use Illuminate\Support\Facades\Log;
@@ -70,7 +71,8 @@ class TableService
             'frontdoor',
             'cashier',
             'order',
-            'headCounts.headRule'
+            'headCounts.headRule',
+            'package',
         ])->whereDate('created_at', Carbon::today())->orderBy('id')->get();
 
         return Inertia::render('Frontdoor/TableOccupancy', [
@@ -86,10 +88,15 @@ class TableService
         $request->validate([
             'guests_count' => 'required|integer|min:1',
             'customer_name' => 'required|string|max:255',
+            'contact_number' => 'nullable|string|max:191',
             'remarks' => 'nullable|string|max:1000',
             'is_shared' => 'nullable|boolean',
+            'pricing_scheme_id' => 'nullable|exists:pricing_schemes,id',
             'head_rule_counts' => 'nullable|array',
             'head_rule_counts.*' => 'integer|min:0',
+            'package_id' => 'nullable|exists:packages,id',
+            'package_pax' => 'nullable|integer|min:1',
+            'package_price' => 'nullable|numeric|min:0',
         ]);
 
         $customerName = trim($request->customer_name);
@@ -140,8 +147,17 @@ class TableService
 
             $table_ref_no = "TBL-{$today}-{$increment}";
 
+            $isPackage = $request->filled('package_id');
+            $packageName = $isPackage
+                ? optional(Package::find($request->package_id))->name
+                : null;
+
             $session = TableSession::create([
-                'pricing_scheme_id' => $request->pricing_scheme_id,
+                'pricing_scheme_id' => $isPackage ? null : $request->pricing_scheme_id,
+                'package_id' => $isPackage ? $request->package_id : null,
+                'package_name' => $packageName,
+                'package_pax' => $isPackage ? $request->package_pax : null,
+                'package_price' => $isPackage ? $request->package_price : null,
                 'ref_no' => $table_ref_no,
                 'table_id' => $tableId,
                 'pax' => $request->guests_count,
@@ -151,6 +167,7 @@ class TableService
                 'order_id' => null,
                 'total_amount' => 0,
                 'customer_name' => $customerName,
+                'contact_number' => $request->contact_number,
                 'remarks' => $request->remarks,
                 // 'is_shared' => $isShared ? 1 : 0,
                 'is_shared' => 1,
@@ -192,7 +209,7 @@ class TableService
 
         return response()->json([
             'success' => true,
-            'table_session' => $session->load(['table', 'cashier', 'order', 'headCounts.headRule'])
+            'table_session' => $session->load(['table', 'cashier', 'order', 'headCounts.headRule', 'package'])
         ]);
     }
 
@@ -220,6 +237,7 @@ class TableService
                 'order',
                 'headCounts.headRule',
                 'reservation',
+                'package',
             ])
             ->where('status', 'open')
             ->get();
@@ -245,7 +263,7 @@ class TableService
         $incomingReservation = null;
 
         if ($request->filled('reservation_id')) {
-            $incomingReservation = Reservation::with('reservationPax.headPricingRule', 'pricingScheme')
+            $incomingReservation = Reservation::with('reservationPax.headPricingRule', 'pricingScheme', 'package')
                 ->find($request->reservation_id);
         }
 

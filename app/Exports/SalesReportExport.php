@@ -70,6 +70,9 @@ class SalesReportExport implements
             'Customer Name',
             'No. of Pax',
             'Amount (Subtotal)',
+            "Add'l Pax Charge",
+            'Time Extension',
+            'SC/PWD Pax',
             'GCash',
             'Cash',
             'Maya',
@@ -77,6 +80,7 @@ class SalesReportExport implements
             'Less Discount',
             'Total Net Sales',
             'Status',
+            'Package',
         ];
     }
 
@@ -113,6 +117,10 @@ class SalesReportExport implements
             ->filter(fn($p) => ($p->paymentMethod?->code ?? '') === 'maya')
             ->sum(fn($p) => (float) ($p->amount ?? 0));
 
+        $packageLabel = ($order->package_id || $order->package_name)
+            ? ($order->package_name ?? 'Package')
+            : '-';
+
         return [
             \Carbon\Carbon::parse($order->created_at)->format('Y-m-d H:i'),
             $order->user?->name ?? '-',
@@ -120,6 +128,9 @@ class SalesReportExport implements
             $customerName,
             $pax,
             (float) ($order->subtotal ?? 0),
+            (float) ($order->additional_pax_amount ?? 0),
+            (float) ($order->time_extension_amount ?? 0),
+            (int) ($order->senior_pax ?? 0),
             $gcash,
             $cash,
             $maya,
@@ -127,6 +138,7 @@ class SalesReportExport implements
             (float) ($order->total_discount ?? 0),
             (float) ($order->total ?? 0),
             $order->status ?? '-',
+            $packageLabel,
         ];
     }
 
@@ -199,7 +211,7 @@ class SalesReportExport implements
                 ]);
 
                 // ── Currency format for data rows ─────────────────────────
-                $currencyCols = ['F', 'G', 'H', 'I', 'J', 'K', 'L'];
+                $currencyCols = ['F', 'G', 'H', 'J', 'K', 'L', 'M', 'N', 'O'];
                 foreach ($currencyCols as $col) {
                     $sheet->getStyle("{$col}2:{$col}{$lastDataRow}")
                         ->getNumberFormat()
@@ -210,7 +222,7 @@ class SalesReportExport implements
                 foreach ($this->orders as $index => $order) {
                     if (($order->status ?? '') === 'cancelled') {
                         $row = $index + 2;
-                        $sheet->getStyle("A{$row}:M{$row}")->applyFromArray([
+                        $sheet->getStyle("A{$row}:Q{$row}")->applyFromArray([
                             'fill' => [
                                 'fillType'   => Fill::FILL_SOLID,
                                 'startColor' => ['argb' => 'FFFEE2E2'],
@@ -224,8 +236,8 @@ class SalesReportExport implements
                 $sheet->insertNewRowBefore(1, 2);
                 $sheet->setCellValue('A1', 'Sales Report');
                 $sheet->setCellValue('A2', 'Period: ' . $this->startDate . ' to ' . $this->endDate);
-                $sheet->mergeCells('A1:M1');
-                $sheet->mergeCells('A2:M2');
+                $sheet->mergeCells('A1:Q1');
+                $sheet->mergeCells('A2:Q2');
                 $sheet->getStyle('A1')->applyFromArray([
                     'font'      => ['bold' => true, 'size' => 14],
                     'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER],

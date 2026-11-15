@@ -6,6 +6,7 @@ use App\Models\Payroll;
 use App\Models\PayrollItem;
 use App\Models\PayrollEarning;
 use App\Models\PayrollDeduction;
+use App\Models\Employee;
 use App\Models\EarningType;
 use App\Models\DeductionType;
 use App\Models\Branch;
@@ -35,6 +36,8 @@ class PayrollService
     public function postPayroll(Request $request)
     {
         try {
+            DB::beginTransaction();
+
             $request->validate([
                 'start_date' => 'required|date',
                 'end_date'   => 'required|date',
@@ -46,12 +49,31 @@ class PayrollService
                 'status'       => 'posted',
             ]);
 
-            $totalGross = 0;
+            $selectedIds = collect($request->employees)->pluck('id')->all();
+            $employeeMap = Employee::with('latestEmployment')
+                ->whereIn('id', $selectedIds)
+                ->get()
+                ->keyBy('id');
 
-            foreach ($request->employees as $key => $employee) {
+            foreach ($request->employees as $employee) {
                 $gross = (float) ($employee['total_earnings'] ?? 0);
 
-                PayrollItem::create([
+                $empModel   = $employeeMap->get($employee['id'] ?? null);
+                $dailyRate  = (float) ($empModel?->latestEmployment->daily_rate ?? 0);
+                $hourlyRate = $dailyRate > 0 ? $dailyRate / 8 : 0;
+
+                // Automatically compute the amount of lates for this cutoff
+                // (minutes late converted to hours, multiplied by hourly rate)
+                // and record it under the payroll deductions.
+                $lateMinutes = max(0, (float) ($employee['total_late'] ?? 0));
+                $lateAmount  = $lateMinutes > 0
+                    ? round(($lateMinutes / 60) * $hourlyRate, 2)
+                    : 0;
+
+                $itemTotalDeductions = $lateAmount;
+                $netPay              = $gross - $itemTotalDeductions;
+
+                $payrollItem = PayrollItem::create([
                     'payroll_id'       => $payroll->id,
                     'employee_id'      => $employee['id'],
                     'days'             => (int) $employee['total_days'],
@@ -61,11 +83,18 @@ class PayrollService
                     'overtime_pay'     => 0,
                     'allowances'       => 0,
                     'gross_pay'        => $gross,
-                    'total_deductions' => 0,
-                    'net_pay'          => $gross,
+                    'total_deductions' => $itemTotalDeductions,
+                    'net_pay'          => $netPay,
                 ]);
 
-                $totalGross += $gross;
+                if ($lateAmount > 0) {
+                    PayrollDeduction::create([
+                        'payroll_item_id' => $payrollItem->id,
+                        'deduction_type'  => 'Tardiness',
+                        'amount'          => $lateAmount,
+                        'remarks'         => "Tardiness deduction ({$lateMinutes} min late)",
+                    ]);
+                }
             }
 
             DB::commit();
@@ -92,8 +121,24 @@ class PayrollService
         $payroll->load([
             'items.earnings',
             'items.deductions',
-            'items.employee',
+            'items.employee.deductionTemplate.details.deductionType',
+            'items.employee.latestEmployment',
+            'items.employee.overtimes',
         ]);
+
+        $cutoffStart = $payroll->cutoff_start;
+        $cutoffEnd   = $payroll->cutoff_end;
+
+        $payroll->items->each(function ($item) use ($cutoffStart, $cutoffEnd) {
+            $rate = (float) ($item->employee?->latestEmployment?->daily_rate ?? 0);
+
+            $otHours = (float) ($item->employee?->overtimes ?? collect())
+                ->where('status', 'approved')
+                ->whereBetween('ot_date', [$cutoffStart, $cutoffEnd])
+                ->sum('total_hours');
+
+            $item->overtime_amount = round(($rate / 8) * 1.25 * $otHours, 2);
+        });
 
         $payroll->setRelation(
             'items',

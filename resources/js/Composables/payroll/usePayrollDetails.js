@@ -110,9 +110,40 @@ export function usePayrollDetails(payroll) {
     return list.reduce((sum, d) => sum + Number(d.amount || 0), 0)
   }
 
+  // 15th cutoff covers the 26th–10th period, 30th covers 11th–25th.
+  // Derive which set of template details applies from the payroll end date.
+  const payrollCutoff = computed(() => {
+    const end = payroll?.cutoff_end
+    if (!end) return null
+
+    const day = Number(String(end).slice(8, 10))
+    if (!day) return null
+
+    return day <= 10 ? '15th' : '30th'
+  })
+
+  const getDeductionDefaults = (employee) => {
+    const cutoff = payrollCutoff.value
+    const details = (employee.employee?.deduction_template?.details || [])
+      .filter((detail) => !cutoff || (detail.cutoff ?? '15th') === cutoff)
+
+    return details.reduce((acc, detail) => {
+      const name = detail.deduction_type?.name
+      if (name) acc[name] = Number(detail.default_value || 0)
+      return acc
+    }, {})
+  }
+
   const openDeductionModal = (employee) => {
+    const saved = employee.deductions || []
+    const hasSaved = saved.length > 0
+    const defaults = getDeductionDefaults(employee)
+
     const amounts = Object.fromEntries(
-      deduction_types.value.map((t) => [t.name, getDeductionAmount(employee, t.name)])
+      deduction_types.value.map((t) => [
+        t.name,
+        hasSaved ? getDeductionAmount(employee, t.name) : (defaults[t.name] ?? 0),
+      ])
     )
     deductionForm.value = {
       payroll_item_id: employee.id,
@@ -232,7 +263,13 @@ export function usePayrollDetails(payroll) {
     const row = (employee.earnings || []).find(
       (e) => e.earning_type === typeName
     )
-    return row ? Number(row.amount || 0) : 0
+    if (row) return Number(row.amount || 0)
+
+    if (typeName === 'Overtime') {
+      return Number(employee.overtime_amount || 0)
+    }
+
+    return 0
   }
 
   const buildEarningsFromForm = () => {

@@ -31,6 +31,14 @@ class Order extends Model
         'shift_id',
         'reservation_id',
         'reservation_fee_used',
+        'package_id',
+        'package_name',
+        'package_pax',
+        'package_price',
+        'additional_pax',
+        'additional_pax_amount',
+        'time_extension_amount',
+        'senior_pax',
     ];
 
     // protected $casts = [
@@ -44,6 +52,12 @@ class Order extends Model
         'total_discount' => 'float',
         'total'    => 'float',
         'voucher_discount_used'    => 'float',
+        'package_price' => 'float',
+        'package_pax' => 'integer',
+        'additional_pax' => 'integer',
+        'additional_pax_amount' => 'float',
+        'time_extension_amount' => 'float',
+        'senior_pax' => 'integer',
     ];
 
 
@@ -100,6 +114,11 @@ class Order extends Model
     public function reservation()
     {
         return $this->belongsTo(Reservation::class, 'reservation_id');
+    }
+
+    public function package()
+    {
+        return $this->belongsTo(Package::class);
     }
 
     public static function getCashierIdOnDuty($now, ?int $shiftId): ?int

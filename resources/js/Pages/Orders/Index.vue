@@ -386,7 +386,7 @@
               <div class="bg-blue-50 border border-blue-100 rounded-xl p-4">
                 <p class="text-xs uppercase tracking-wide text-blue-700 font-semibold">Base Dining</p>
                 <p class="text-2xl font-bold text-blue-900 mt-1">
-                  ₱{{ Number(orderTotals.heads_subtotal).toFixed(2) }}
+                  ₱{{ Number(orderTotals.heads_subtotal + orderTotals.package_subtotal).toFixed(2) }}
                 </p>
               </div>
 
@@ -464,6 +464,21 @@
                     </thead>
                     <tbody>
                       <tr
+                        v-if="selectedOrder?.package_price"
+                        class="border-t bg-purple-50"
+                      >
+                        <td class="px-4 py-3">
+                          <i class="fa fa-box text-purple-500 mr-1"></i>
+                          {{ selectedOrder?.package_name || 'Package' }}
+                        </td>
+                        <td class="px-4 py-3">{{ Number(selectedOrder?.package_pax || 0).toFixed(0) }}</td>
+                        <td class="px-4 py-3">₱{{ Number(selectedOrder?.package_price || 0).toFixed(2) }}</td>
+                        <td class="px-4 py-3 text-right font-medium">
+                          ₱{{ Number(selectedOrder?.package_price || 0).toFixed(2) }}
+                        </td>
+                      </tr>
+
+                      <tr
                         v-for="head in selectedOrder?.order_heads || []"
                         :key="head.id"
                         class="border-t"
@@ -478,7 +493,7 @@
                         </td>
                       </tr>
 
-                      <tr v-if="(selectedOrder?.order_heads || []).length === 0">
+                      <tr v-if="(selectedOrder?.order_heads || []).length === 0 && !selectedOrder?.package_price">
                         <td colspan="4" class="px-4 py-6 text-center text-gray-400">
                           No base dining charges found.
                         </td>
@@ -488,7 +503,7 @@
                       <tr>
                         <td colspan="3" class="px-4 py-3 text-right font-semibold">Subtotal</td>
                         <td class="px-4 py-3 text-right font-bold">
-                          ₱{{ Number(orderTotals.heads_subtotal).toFixed(2) }}
+                          ₱{{ Number(orderTotals.heads_subtotal + orderTotals.package_subtotal).toFixed(2) }}
                         </td>
                       </tr>
                     </tfoot>
@@ -566,9 +581,24 @@
                   <span class="font-medium">₱{{ Number(orderTotals.heads_subtotal).toFixed(2) }}</span>
                 </div>
 
+                <div v-if="orderTotals.package_subtotal > 0" class="flex justify-between">
+                  <span class="text-gray-600">Package ({{ selectedOrder?.package_name || 'Package' }})</span>
+                  <span class="font-medium">₱{{ Number(orderTotals.package_subtotal).toFixed(2) }}</span>
+                </div>
+
                 <div class="flex justify-between">
                   <span class="text-gray-600">Add-ons</span>
                   <span class="font-medium">₱{{ Number(orderTotals.addons_subtotal).toFixed(2) }}</span>
+                </div>
+
+                <div v-if="orderTotals.additional_pax_amount > 0" class="flex justify-between">
+                  <span class="text-gray-600">Additional Pax Charge</span>
+                  <span class="font-medium">₱{{ Number(orderTotals.additional_pax_amount).toFixed(2) }}</span>
+                </div>
+
+                <div v-if="orderTotals.time_extension_amount > 0" class="flex justify-between">
+                  <span class="text-gray-600">Time Extension</span>
+                  <span class="font-medium">₱{{ Number(orderTotals.time_extension_amount).toFixed(2) }}</span>
                 </div>
 
                 <div
@@ -581,7 +611,7 @@
                       (Voucher: {{ selectedOrder.voucher_no_used }})
                     </span>
                     <span v-else-if="selectedOrder?.discount_type">
-                      ({{ selectedOrder.discount_type }})
+                      ({{ selectedOrder.discount_type }}<template v-if="orderTotals.senior_pax > 0"> — {{ orderTotals.senior_pax }} pax</template>)
                     </span>
                   </span>
                   <span class="font-medium">-₱{{ Number(orderTotals.total_discount).toFixed(2) }}</span>

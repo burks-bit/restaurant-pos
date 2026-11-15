@@ -45,8 +45,13 @@ export function useOrdersIndex() {
 
   const orderTotals = reactive({
     heads_subtotal: 0,
+    package_subtotal: 0,
     addons_subtotal: 0,
     leftover_amount: 0,
+    additional_pax: 0,
+    additional_pax_amount: 0,
+    time_extension_amount: 0,
+    senior_pax: 0,
     subtotal: 0,
     total_discount: 0,
     total: 0,
@@ -81,17 +86,29 @@ export function useOrdersIndex() {
     const heads = selectedOrder.value.order_heads ?? []
     const addons = selectedOrder.value.addons ?? []
     const leftoverAmount = Number(selectedOrder.value.leftover?.amount || 0)
+    const packageSubtotal = Number(selectedOrder.value.package_price || 0)
 
     const headsSubtotal = heads.reduce((sum, head) => sum + Number(head.subtotal || 0), 0)
     const addonsSubtotal = addons.reduce((sum, addon) => sum + Number(addon.subtotal || 0), 0)
 
-    const subtotal = headsSubtotal + addonsSubtotal + leftoverAmount
+    const additionalPax = Number(selectedOrder.value.additional_pax || 0)
+    const additionalPaxAmount = Number(selectedOrder.value.additional_pax_amount || 0)
+    const timeExtensionAmount = Number(selectedOrder.value.time_extension_amount || 0)
+    const seniorPax = Number(selectedOrder.value.senior_pax || 0)
+
+    const subtotal = headsSubtotal + packageSubtotal + addonsSubtotal + leftoverAmount
+      + additionalPaxAmount + timeExtensionAmount
     const totalDiscount = Number(selectedOrder.value.total_discount || 0)
     const total = Math.max(subtotal - totalDiscount, 0)
 
     orderTotals.heads_subtotal = headsSubtotal
+    orderTotals.package_subtotal = packageSubtotal
     orderTotals.addons_subtotal = addonsSubtotal
     orderTotals.leftover_amount = leftoverAmount
+    orderTotals.additional_pax = additionalPax
+    orderTotals.additional_pax_amount = additionalPaxAmount
+    orderTotals.time_extension_amount = timeExtensionAmount
+    orderTotals.senior_pax = seniorPax
     orderTotals.subtotal = subtotal
     orderTotals.total_discount = totalDiscount
     orderTotals.total = total

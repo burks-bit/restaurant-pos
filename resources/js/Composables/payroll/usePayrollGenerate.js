@@ -49,6 +49,14 @@ const grandTotal = computed(() => {
     .toFixed(2)
 })
 
+// Automatically compute the monetary value of an employee's lates for the
+// given cutoff: (total_late minutes / 60 hours) * hourly rate.
+const lateAmount = (emp) => {
+  const minutes = Number(emp.total_late || 0)
+  const hourlyRate = Number(emp.hourly_rate || 0)
+  return Math.round((minutes / 60) * hourlyRate * 100) / 100
+}
+
   const resetState = () => {
     filters.value = {
       start_date: '',
@@ -94,9 +102,12 @@ const postPayroll = async () => {
   try {
     isLoading.value = true
 
-    const selectedEmployees = employees.value.filter(e =>
-      selectedEmployeeIds.value.includes(e.id)
-    )
+    const selectedEmployees = employees.value
+      .filter(e => selectedEmployeeIds.value.includes(e.id))
+      .map(e => ({
+        ...e,
+        late_amount: lateAmount(e),
+      }))
 
     await axios.post(route(`${prefix.value}.payroll.post`), {
       ...filters.value,
@@ -119,6 +130,7 @@ const postPayroll = async () => {
     employees,
     isLoading,
     grandTotal,
+    lateAmount,
     getSchedules,
     postPayroll,
 

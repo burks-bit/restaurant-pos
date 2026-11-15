@@ -16,4 +16,9 @@ class DeductionType extends Model
     {
         return $this->hasMany(PayrollDeduction::class);
     }
+
+    public function templateDetails()
+    {
+        return $this->hasMany(EmployeeDeductionTemplateDetail::class);
+    }
 }

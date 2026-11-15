@@ -186,7 +186,22 @@
                     </tr>
                 </thead>
                 <tbody>
-                    @forelse($order->orderHeads as $head)
+                    @php
+                        $hasBaseCharge = ($order->package_price ?? 0) > 0 || $order->orderHeads->isNotEmpty();
+                    @endphp
+
+                    @if(($order->package_price ?? 0) > 0)
+                        <tr>
+                            <td>
+                                <i>{{ $order->package_name ?? 'Package' }}</i>
+                                <div class="small">₱{{ number_format((float) $order->package_price, 2) }} • {{ $order->package_pax }} pax</div>
+                            </td>
+                            <td class="qty">{{ number_format((float) ($order->package_pax ?? 0), 0) }}</td>
+                            <td class="amt">₱{{ number_format((float) $order->package_price, 2) }}</td>
+                        </tr>
+                    @endif
+
+                    @foreach($order->orderHeads as $head)
                         <tr>
                             <td>
                                 {{ $head->headPricingRule->label ?? ('Head Rule #' . $head->head_pricing_rule_id) }}
@@ -195,11 +210,13 @@
                             <td class="qty">{{ number_format((float) $head->quantity, 0) }}</td>
                             <td class="amt">₱{{ number_format((float) $head->subtotal, 2) }}</td>
                         </tr>
-                    @empty
+                    @endforeach
+
+                    @unless($hasBaseCharge)
                         <tr>
                             <td colspan="3" class="center small">No base dining charges found.</td>
                         </tr>
-                    @endforelse
+                    @endunless
                 </tbody>
             </table>
         </div>
@@ -266,6 +283,13 @@
                     <td class="label">Base Dining</td>
                     <td class="value">₱{{ number_format($headsSubtotal, 2) }}</td>
                 </tr>
+
+                @if(($packagePrice ?? 0) > 0)
+                    <tr>
+                        <td class="label">Package ({{ $order->package_name ?? 'Package' }})</td>
+                        <td class="value">₱{{ number_format($packagePrice, 2) }}</td>
+                    </tr>
+                @endif
                 <tr>
                     <td class="label">Add-ons</td>
                     <td class="value">₱{{ number_format($addonsSubtotal, 2) }}</td>
@@ -275,6 +299,20 @@
                     <tr>
                         <td class="label">Leftover Charge</td>
                         <td class="value">₱{{ number_format($leftoverAmount, 2) }}</td>
+                    </tr>
+                @endif
+
+                @if(($additionalPaxAmount ?? 0) > 0)
+                    <tr>
+                        <td class="label">Additional Pax Charge</td>
+                        <td class="value">₱{{ number_format($additionalPaxAmount, 2) }}</td>
+                    </tr>
+                @endif
+
+                @if(($timeExtensionAmount ?? 0) > 0)
+                    <tr>
+                        <td class="label">Time Extension</td>
+                        <td class="value">₱{{ number_format($timeExtensionAmount, 2) }}</td>
                     </tr>
                 @endif
 
@@ -385,7 +423,7 @@
                 </tr>
                 <tr>
                     <td><strong>No. of Pax:</strong></td>
-                    <td style="text-align:right;">{{ $order->orderHeads->sum('quantity') }}</td>
+                    <td style="text-align:right;">{{ ($order->orderHeads->sum('quantity') ?: ($order->package_pax ?? ($order->tableSession->pax ?? 0))) + ($order->additional_pax ?? 0) }}</td>
                 </tr>
             @endif
             <tr>

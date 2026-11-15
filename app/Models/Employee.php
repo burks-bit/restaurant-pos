@@ -50,4 +50,9 @@ class Employee extends Model
     {
         return $this->hasMany(PayrollItem::class);
     }
+
+    public function deductionTemplate()
+    {
+        return $this->hasOne(EmployeeDeductionTemplate::class);
+    }
 }

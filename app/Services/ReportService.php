@@ -827,6 +827,7 @@ class ReportService
                 'orderHeads.headPricingRule',
                 'payments.paymentMethod',
                 'addons',
+                'package',
             ])
             ->when($startDate && $endDate, fn($q) => $q->whereBetween('created_at', [
                 $startDate . ' 00:00:00',
@@ -992,6 +993,9 @@ class ReportService
         $grossSales    = $data['orders']->where('status', 'paid')->sum('subtotal');
         $totalDiscount = $data['orders']->where('status', 'paid')->sum('total_discount');
         $voidedSales   = $data['orders']->where('status', 'cancelled')->sum('total');
+        $additionalPaxTotal = $data['orders']->where('status', 'paid')->sum('additional_pax_amount');
+        $timeExtensionTotal = $data['orders']->where('status', 'paid')->sum('time_extension_amount');
+        $seniorPaxTotal     = $data['orders']->where('status', 'paid')->sum('senior_pax');
 
         // ── Render PDF ────────────────────────────────────────────────────────────
         $mpdf = new Mpdf([
@@ -1013,6 +1017,9 @@ class ReportService
             'voidedSales'         => $voidedSales,
             'totalCashSales'      => $data['totalCashSales'],
             'totalGcashSales'     => $data['totalGcashSales'],
+            'additionalPaxTotal'  => $additionalPaxTotal,
+            'timeExtensionTotal'  => $timeExtensionTotal,
+            'seniorPaxTotal'      => $seniorPaxTotal,
             'totalReservationFee' => $data['totalReservationFees'],
             'consumedAddons'      => array_values($data['consumedAddons']),
             'payments'            => $data['payments'],

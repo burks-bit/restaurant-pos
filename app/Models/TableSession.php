@@ -11,6 +11,10 @@ class TableSession extends Model
 
     protected $fillable = [
         'pricing_scheme_id',
+        'package_id',
+        'package_name',
+        'package_pax',
+        'package_price',
         'ref_no',
         'table_id',
         'pax',
@@ -23,7 +27,13 @@ class TableSession extends Model
         'order_id',
         'remarks',
         'customer_name',
+        'contact_number',
         'is_shared'
+    ];
+
+    protected $casts = [
+        'package_price' => 'float',
+        'package_pax' => 'integer',
     ];
 
     /*
@@ -64,6 +74,11 @@ class TableSession extends Model
     public function reservation()
     {
         return $this->hasOne(Reservation::class, 'table_session_id');
+    }
+
+    public function package()
+    {
+        return $this->belongsTo(Package::class);
     }
 
     /*

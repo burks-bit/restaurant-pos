@@ -12,6 +12,8 @@ use App\Http\Controllers\TableController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\HeadPricingRuleController;
 use App\Http\Controllers\EmployeeController;
+use App\Http\Controllers\DeductionTemplateController;
+use App\Http\Controllers\PackageController;
 use App\Http\Controllers\VoucherController;
 use App\Http\Controllers\BranchController;
 use App\Http\Controllers\DTRController;
@@ -77,6 +79,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('/clock-in', [DTRController::class, 'clockIn'])->name('clockin');
         Route::post('/clock-out', [DTRController::class, 'clockOut'])->name('clockout');
         Route::post('/overtimes', [DTRController::class, 'saveOvertime'])->name('overtimes.store');
+        Route::put('/overtimes/{id}', [DTRController::class, 'updateOvertime'])->name('overtimes.update');
     };
 
     $pettyCashRoutes = function () {
@@ -141,6 +144,12 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('/employees/{employee}/dtr', [EmployeeController::class, 'fetchDTR'])->name('employees.dtr.fetch');
 
         Route::get('/employees/{employee}/payroll/attendance-pdf', [EmployeeController::class, 'generateEmployeePayrollPdf'])->name('employees.payroll.attendance.pdf');
+
+        // Deduction Templates
+        Route::get('/deduction-templates', [DeductionTemplateController::class, 'index'])->name('deduction-templates.index');
+        Route::post('/deduction-templates', [DeductionTemplateController::class, 'store'])->name('deduction-templates.store');
+        Route::put('/deduction-templates/{employeeDeductionTemplate}', [DeductionTemplateController::class, 'update'])->name('deduction-templates.update');
+        Route::delete('/deduction-templates/{employeeDeductionTemplate}', [DeductionTemplateController::class, 'destroy'])->name('deduction-templates.destroy');
     };
 
     $payrollRoutes = function () {
@@ -269,6 +278,13 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::resource('/reservations', ReservationController::class);
     };
 
+    $packageRoutes = function () {
+        Route::get('/packages', [PackageController::class, 'index'])->name('packages.index');
+        Route::post('/packages', [PackageController::class, 'store'])->name('packages.store');
+        Route::put('/packages/{package}', [PackageController::class, 'update'])->name('packages.update');
+        Route::delete('/packages/{package}', [PackageController::class, 'destroy'])->name('packages.destroy');
+    };
+
     /*
     |--------------------------------------------------------------------------
     | Non-Admin Shared Routes
@@ -297,7 +313,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
         $menuRoutes,
         $expenseRoutes,
         $reportIndexRoutes,
-        $frontdoorTableRoutes
+        $frontdoorTableRoutes,
+        $packageRoutes
     ) {
         $posRoutes();
         $orderRoutes(true, true, true, true, true);
@@ -305,6 +322,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         $reportIndexRoutes();
         $expenseRoutes();
         $frontdoorTableRoutes();
+        $packageRoutes();
 
         $inventoryRoutes(true, true);
         $employeeRoutes();
@@ -348,12 +366,14 @@ Route::middleware(['auth', 'verified'])->group(function () {
         $orderRoutes,
         $menuRoutes,
         $expenseRoutes,
-        $reportIndexRoutes
+        $reportIndexRoutes,
+        $packageRoutes
     ) {
         $posRoutes();
         $orderRoutes(true, true, true, true, true);
         $menuRoutes();
         $reportIndexRoutes();
+        $packageRoutes();
 
         Route::get('/users', [UserController::class, 'index'])->name('users');
         Route::post('/users', [UserController::class, 'store'])->name('users.store');

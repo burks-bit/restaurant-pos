@@ -100,7 +100,26 @@
                 </span>
               </div>
 
-              <div v-if="cart[0].head_counts?.length === 0" class="text-sm text-gray-500">
+              <!-- PACKAGE MODE -->
+              <div v-if="cart[0].is_package" class="border rounded-lg p-3 bg-white">
+                <div class="flex justify-between items-start">
+                  <div>
+                    <p class="font-medium text-gray-800">
+                      <i class="fa fa-box text-purple-500 mr-1"></i>
+                      {{ cart[0].package_name || 'Package' }}
+                    </p>
+                    <p class="text-sm text-gray-500 mt-1">
+                      ₱{{ Number(cart[0].package_price).toFixed(2) }} · {{ cart[0].package_pax }} pax
+                    </p>
+                  </div>
+
+                  <div class="font-semibold text-gray-800">
+                    ₱{{ Number(cart[0].package_price).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }}
+                  </div>
+                </div>
+              </div>
+
+              <div v-else-if="cart[0].head_counts?.length === 0" class="text-sm text-gray-500">
                 No base dine-in details found.
               </div>
 
@@ -297,16 +316,55 @@
             <div class="border rounded-xl p-4 bg-gray-50">
               <h3 class="font-semibold text-gray-800 text-lg mb-4">Checkout Details</h3>
 
-              <label v-if="is_discount_allowed === 1" class="flex items-center mb-3">
-                <input
-                  type="checkbox"
-                  v-model="isSeniorOrPWD"
-                  @change="handleSeniorPWDChange"
-                  :disabled="voucherApplied"
-                  class="mr-2"
-                >
-                Senior / PWD (20%)
-              </label>
+              <div
+                class="grid gap-2 mb-4"
+                :class="is_discount_allowed === 1 ? 'grid-cols-3' : 'grid-cols-2'"
+              >
+                <div>
+                  <label class="block text-xs font-medium text-gray-700 mb-1">
+                    Add'l Pax Charge (₱)
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    v-model.number="additionalPax"
+                    class="w-full border rounded px-2 py-2 bg-white"
+                    placeholder="0.00"
+                  >
+                </div>
+
+                <div>
+                  <label class="block text-xs font-medium text-gray-700 mb-1">
+                    Time Extension (₱)
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    v-model.number="timeExtensionAmount"
+                    class="w-full border rounded px-2 py-2 bg-white"
+                    placeholder="0.00"
+                  >
+                </div>
+
+                <div v-if="is_discount_allowed === 1">
+                  <label class="block text-xs font-medium text-gray-700 mb-1">
+                    SC/PWD Pax
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    :max="totalPax"
+                    step="1"
+                    v-model.number="seniorPax"
+                    @change="handleSeniorPWDChange"
+                    :disabled="voucherApplied"
+                    class="w-full border rounded px-2 py-2 bg-white"
+                    placeholder="0"
+                  >
+                </div>
+              </div>
 
               <div class="mb-4">
                 <div class="flex gap-2">
@@ -344,6 +402,16 @@
                   <span>Leftovers</span>
                   <span>₱{{ leftoversTotal.toFixed(2) }}</span>
                 </div>
+
+                <div v-if="additionalPaxAmount > 0" class="flex justify-between">
+                  <span>Additional Pax Charge</span>
+                  <span>₱{{ additionalPaxAmount.toFixed(2) }}</span>
+                </div>
+
+                <div v-if="timeExtensionCharge > 0" class="flex justify-between">
+                  <span>Time Extension</span>
+                  <span>₱{{ timeExtensionCharge.toFixed(2) }}</span>
+                </div>
                 
                 <div v-if="reservationFee > 0" class="flex justify-between text-green-600">
                   <span>Reservation Fee (paid)</span>
@@ -356,7 +424,11 @@
                 </div>
 
                 <div v-if="discountAmount > 0" class="flex justify-between text-green-600">
-                  <span>Discount</span>
+                  <span>
+                    Discount
+                    <span v-if="appliedDiscountType === 'senior' && seniorCount > 0">({{ seniorCount }} Senior/PWD)</span>
+                    <span v-else-if="voucherApplied">(Voucher)</span>
+                  </span>
                   <span>-₱{{ discountAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }}</span>
                 </div>
 
@@ -827,6 +899,9 @@ const {
 
   showPrintModal,
   isSeniorOrPWD,
+  seniorPax,
+  additionalPax,
+  timeExtensionAmount,
   voucherCode,
   voucherApplied,
 
@@ -885,6 +960,11 @@ const {
   discountAmount,
   totalPrice,
   changeAmount,
+  sessionPax,
+  totalPax,
+  additionalPaxAmount,
+  timeExtensionCharge,
+  seniorCount,
 
   leftoverPreviewTotal,
   addonSelectedTotal,

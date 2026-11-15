@@ -10,9 +10,6 @@ class Payroll extends Model
         'cutoff_start',
         'cutoff_end',
         'status',
-        'total_gross',
-        'total_deductions',
-        'total_net',
         'payslip_pdf_path',
         'payslip_pdf_name',
     ];

@@ -10,6 +10,7 @@ export function useReservations(reservationsSource) {
   const processing = ref(false)
 
   const emptyForm = () => ({
+    mode: 'scheme',      // 'scheme' | 'package'
     name: '',
     pricing_scheme_id: '',
     pax_breakdown: [],   // [{ head_pricing_rule_id, qty, price_snapshot, subtotal }]
@@ -23,6 +24,10 @@ export function useReservations(reservationsSource) {
     fee_reference_no: '',
     shift_id: null,
     cashier_employee_id: null,
+    cashier_user_id: null,
+    package_id: null,
+    package_pax: null,
+    package_price: null,
   })
 
   const newForm = ref(emptyForm())
@@ -103,6 +108,7 @@ export function useReservations(reservationsSource) {
     // console.log('openEditModal', reservation.order?.user)
     editForm.value = {
       id: reservation.id,
+      mode: reservation.package_id ? 'package' : 'scheme',
       name: reservation.name,
       pricing_scheme_id: reservation.pricing_scheme_id ?? '',
       pax_breakdown: breakdown,
@@ -116,6 +122,10 @@ export function useReservations(reservationsSource) {
       fee_reference_no: reservation.fee_reference_no ?? '',
       shift_id: reservation.shift_id ?? null,
       cashier_employee_id: reservation.cashier_employee_id ?? reservation.order?.user?.id,
+      cashier_user_id: reservation.cashier_user_id ?? reservation.order?.user?.id ?? null,
+      package_id: reservation.package_id ?? null,
+      package_pax: reservation.package_pax ?? null,
+      package_price: reservation.package_price ?? null,
     }
     showEditModal.value = true
   }
@@ -125,12 +135,60 @@ export function useReservations(reservationsSource) {
     showArrivalModal.value = true
   }
 
-  const preparePayload = (form) => ({
-    ...form,
-    pax: totalPax(form.pax_breakdown),
-  })
+  const preparePayload = (form) => {
+    const base = {
+      mode: form.mode,
+      name: form.name,
+      reservation_datetime: form.reservation_datetime,
+      contact_number: form.contact_number,
+      remarks: form.remarks,
+      status: form.status,
+      reservation_fee: form.reservation_fee,
+      fee_payment_method: form.fee_payment_method,
+      fee_reference_no: form.fee_reference_no,
+      shift_id: form.shift_id,
+      cashier_user_id: form.cashier_user_id,
+    }
+
+    // Package reservation: pax comes from the selected package variant and
+    // there is no head-pricing-rule breakdown.
+    if (form.mode === 'package') {
+      return {
+        ...base,
+        package_id: form.package_id,
+        package_pax: form.package_pax,
+        package_price: form.package_price,
+        pax: parseInt(form.package_pax) || 0,
+      }
+    }
+
+    // Pricing-scheme reservation: original behaviour.
+    return {
+      ...base,
+      pricing_scheme_id: form.pricing_scheme_id,
+      pax_breakdown: form.pax_breakdown,
+      pax: totalPax(form.pax_breakdown),
+    }
+  }
+
+  // ── package selection ──────────────────────────────────────────────────────
+  const selectPackage = (form, pkg, priceRow) => {
+    form.package_id = pkg.id
+    form.package_pax = priceRow?.pax ?? null
+    form.package_price = priceRow?.price ?? null
+  }
+
+  const clearPackage = (form) => {
+    form.package_id = null
+    form.package_pax = null
+    form.package_price = null
+  }
 
   const saveReservation = () => {
+    if (newForm.value.mode === 'package' && !newForm.value.package_id) {
+      alert('Please select a package and a pax/price variant.')
+      return
+    }
     processing.value = true
     router.post('/frontdoor/reservations', preparePayload(newForm.value), {
       onSuccess: () => { showAddModal.value = false },
@@ -139,6 +197,10 @@ export function useReservations(reservationsSource) {
   }
 
   const updateReservation = () => {
+    if (editForm.value.mode === 'package' && !editForm.value.package_id) {
+      alert('Please select a package and a pax/price variant.')
+      return
+    }
     processing.value = true
     router.put(
       `/frontdoor/reservations/${editForm.value.id}`,
@@ -189,6 +251,7 @@ export function useReservations(reservationsSource) {
     filteredReservations,
     // helpers
     totalPax, totalEstimated, onQtyChange,
+    selectPackage, clearPackage,
     // actions
     openAddModal, openEditModal, openArrivalModal,
     saveReservation, updateReservation, deleteReservation, goToAdmission,

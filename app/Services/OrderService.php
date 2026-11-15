@@ -42,6 +42,7 @@ class OrderService
                 'addons',
                 'leftover',
                 'payments.paymentMethod',
+                'package',
             ])
             ->whereDate('created_at', $today)
             ->orderBy('created_at', 'desc');
@@ -73,6 +74,10 @@ class OrderService
             ->get();
 
         $total_unbilled = $unbilled_sessions->sum(function ($session) {
+            if (!is_null($session->package_id) || (float) ($session->package_price ?? 0) > 0) {
+                return (float) ($session->package_price ?? 0);
+            }
+
             return collect($session->headCounts ?? [])->sum(function ($head) {
                 return ($head->subtotal ?? 0);
             });
@@ -139,7 +144,7 @@ class OrderService
 
         $request->validate([
             'table_session_id' => 'required|exists:table_sessions,id',
-            'heads' => 'required|array|min:1',
+            'heads' => 'nullable|array',
 
             'payments' => 'required|array|min:1',
             'payments.*.payment_method_id' => 'required|exists:payment_methods,id',
@@ -157,11 +162,16 @@ class OrderService
             'voucher_discount' => 'nullable',
             'approving_manager' => 'nullable',
             'reservation_fee_used' => 'nullable|numeric|min:0',
+            'additional_pax' => 'nullable|integer|min:0',
+            'additional_pax_amount' => 'nullable|numeric|min:0',
+            'time_extension_amount' => 'nullable|numeric|min:0',
+            'senior_pax' => 'nullable|integer|min:0',
         ]);
 
         $createdOrder = DB::transaction(function () use ($request) {
             $tableSession = TableSession::with([
                     'headCounts.headRule',
+                    'package',
                     'addons' => function ($query) {
                         $query->where('is_billed', false)
                             ->where('is_void', 0);
@@ -174,7 +184,15 @@ class OrderService
                 throw new \Exception('Table session already closed.');
             }
 
-            $baseSubtotal = (float) $tableSession->headCounts()->sum('subtotal');
+            // Package sessions are billed at a fixed package price instead of the
+            // per-head pricing-rule breakdown, so the package amount becomes the
+            // base subtotal (head counts are empty for these sessions).
+            $packagePrice = (float) ($tableSession->package_price ?? 0);
+            $isPackage = !is_null($tableSession->package_id) || $packagePrice > 0;
+
+            $baseSubtotal = $isPackage
+                ? $packagePrice
+                : (float) $tableSession->headCounts()->sum('subtotal');
 
             $addonsTotal = (float) $tableSession->addons()
                 ->where('is_billed', false)
@@ -183,11 +201,49 @@ class OrderService
 
             $leftoversTotal = (float) ($request->leftovers_total ?? 0);
 
-            $subtotal = $baseSubtotal + $addonsTotal + $leftoversTotal;
+            // Number of pax that was actually reserved / admitted. This is the
+            // basis for the per-head rate used by additional pax and the
+            // senior/PWD discount (so the discount is only for the senior pax,
+            // not the whole bill).
+            $sessionPax = $isPackage
+                ? (int) ($tableSession->package_pax ?: $tableSession->pax)
+                : (int) $tableSession->headCounts()->sum('qty');
+
+            if ($sessionPax <= 0) {
+                $sessionPax = (int) ($tableSession->pax ?? 0);
+            }
+
+            $perHeadRate = $sessionPax > 0 ? $baseSubtotal / $sessionPax : 0;
+
+            // The cashier enters the additional pax charge directly as a peso
+            // amount. The pax count is kept for backwards compatibility but is
+            // no longer required to compute the charge.
+            $additionalPax = max(0, (int) ($request->additional_pax ?? 0));
+            $additionalPaxAmount = $request->filled('additional_pax_amount')
+                ? max(0, (float) $request->additional_pax_amount)
+                : round($additionalPax * $perHeadRate, 2);
+            $timeExtensionAmount = max(0, (float) ($request->time_extension_amount ?? 0));
+
+            $totalPax = $sessionPax + $additionalPax;
+            $seniorPax = min(max(0, (int) ($request->senior_pax ?? 0)), $totalPax);
+            $seniorDiscount = round($seniorPax * $perHeadRate * 0.20, 2);
+
+            $subtotal = $baseSubtotal + $addonsTotal + $leftoversTotal
+                + $additionalPaxAmount + $timeExtensionAmount;
 
             // $totalDiscount = (float) ($request->total_discount ?? 0);
             // $total = max($subtotal - $totalDiscount, 0);
-            $totalDiscount    = (float) ($request->total_discount ?? 0);
+            $totalDiscount = (float) ($request->total_discount ?? 0);
+
+            // Senior/PWD discount is always recomputed per head on the server so
+            // only the actual senior/PWD pax are discounted. Voucher discounts
+            // keep the amount computed by the cashier's screen.
+            $isVoucherDiscount = !empty($request->voucher_code) && !empty($request->voucher_discount);
+
+            if (!$isVoucherDiscount && $seniorPax > 0 && !empty($request->approving_manager)) {
+                $totalDiscount = $seniorDiscount;
+            }
+
             $reservationFee   = (float) ($request->reservation_fee_used ?? 0);
             $total            = max($subtotal - $totalDiscount - $reservationFee, 0);
 
@@ -300,6 +356,14 @@ class OrderService
                         : $request->approving_manager)
                     : null,
                 'reservation_id' => $request->reservation_id ?? null,
+                'package_id' => $isPackage ? $tableSession->package_id : null,
+                'package_name' => $isPackage ? $tableSession->package_name : null,
+                'package_pax' => $isPackage ? $tableSession->package_pax : null,
+                'package_price' => $isPackage ? $packagePrice : null,
+                'additional_pax' => $additionalPax,
+                'additional_pax_amount' => $additionalPaxAmount,
+                'time_extension_amount' => $timeExtensionAmount,
+                'senior_pax' => $seniorPax,
             ]);
 
             $order->update([
@@ -413,6 +477,7 @@ class OrderService
                 'cashier_id' => auth()->id(),
                 'order_id' => $order->id,
                 'total_amount' => $total,
+                'pax' => $totalPax,
             ]);
 
             return $order;
@@ -1472,15 +1537,25 @@ class OrderService
         $leftoverAmount = (float) optional($order->leftover)->amount;
         $discount = (float) ($order->total_discount ?? 0);
 
-        $computedSubtotal = $headsSubtotal + $addonsSubtotal + $leftoverAmount;
+        $packagePrice = (float) ($order->package_price ?? 0);
+        $additionalPax = (int) ($order->additional_pax ?? 0);
+        $additionalPaxAmount = (float) ($order->additional_pax_amount ?? 0);
+        $timeExtensionAmount = (float) ($order->time_extension_amount ?? 0);
+
+        $computedSubtotal = $headsSubtotal + $packagePrice + $addonsSubtotal + $leftoverAmount
+            + $additionalPaxAmount + $timeExtensionAmount;
         $computedTotal = max($computedSubtotal - $discount, 0);
 
         $html = view('receipts.receipt', compact(
             'order',
             'branch',
             'headsSubtotal',
+            'packagePrice',
             'addonsSubtotal',
             'leftoverAmount',
+            'additionalPax',
+            'additionalPaxAmount',
+            'timeExtensionAmount',
             'computedSubtotal',
             'computedTotal',
             'discount'
@@ -1555,6 +1630,10 @@ class OrderService
             ->get();
 
         $total_unbilled = $unbilled_sessions->sum(function ($session) {
+            if (!is_null($session->package_id) || (float) ($session->package_price ?? 0) > 0) {
+                return (float) ($session->package_price ?? 0);
+            }
+
             return collect($session->headCounts ?? [])->sum(function ($head) {
                 return (float) ($head->subtotal ?? 0);
             });

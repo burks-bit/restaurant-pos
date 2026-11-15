@@ -723,7 +723,7 @@
                         </td>
 
                         <td class="px-4 py-3 text-center font-semibold" :class="undertimeClass(sch)">
-                          {{ calculateUndertime(sch.time_out, sch.actual_time_out) }}
+                          {{ calculateUndertime(sch) }}
                         </td>
 
                         <!-- <td class="px-4 py-3 text-center font-semibold">
@@ -830,6 +830,10 @@
               <!-- FIXED SUMMARY FOOTER -->
               <div class="bg-gray-100 border-t px-4 py-3 flex justify-end gap-10 text-sm font-semibold">
                 <div>
+                  Total No. of Days:
+                  <span class="text-blue-700 ml-2">{{ totalDaysWithActual }} / {{ totalScheduledDays }}</span>
+                </div>
+                <div>
                   Total late:
                   <span class="text-red-700 ml-2">{{ totalLate }}</span>
                 </div>
@@ -858,22 +862,17 @@
           <div class="bg-white w-full max-w-md rounded-xl shadow-lg p-6">
 
             <h3 class="text-lg font-semibold mb-4 text-gray-700">
-              File Overtime Form
+              {{ editingOtId ? 'Edit Overtime Form' : 'File Overtime Form' }}
             </h3>
 
             <form @submit.prevent="submitOt">
 
               <div class="space-y-4 text-sm">
 
-                <!-- <div>
-                  <label class="block font-medium">Date</label>
-                  <input
-                    type="date"
-                    v-model="otForm.ot_date"
-                    class="w-full border rounded px-3 py-2"
-                    required
-                  />
-                </div> -->
+                <div class="flex items-center justify-between rounded-lg border border-gray-200 bg-gray-50 px-3 py-2">
+                  <span class="text-gray-500">OT Date</span>
+                  <span class="font-medium text-gray-800">{{ otForm.ot_date || '—' }}</span>
+                </div>
 
                 <div>
                   <label class="block font-medium">Start Time</label>
@@ -893,6 +892,15 @@
                     class="w-full border rounded px-3 py-2"
                     required
                   />
+                  <p v-if="otIsOvernight" class="mt-1 text-xs text-amber-600">
+                    <i class="fa-solid fa-moon mr-1"></i>
+                    End time is on the next day (crosses midnight).
+                  </p>
+                </div>
+
+                <div class="flex items-center justify-between rounded-lg border border-indigo-100 bg-indigo-50 px-3 py-2">
+                  <span class="font-medium text-indigo-700">Total Hours</span>
+                  <span class="text-base font-semibold text-indigo-700">{{ otTotalHours }} hrs</span>
                 </div>
 
                 <div>
@@ -961,7 +969,7 @@
                   </svg>
 
                   <span>
-                    {{ isLoadingOT ? 'Submitting...' : 'Submit OT' }}
+                    {{ isLoadingOT ? 'Submitting...' : (editingOtId ? 'Update OT' : 'Submit OT') }}
                   </span>
                 </button>
               </div>
@@ -969,7 +977,7 @@
             </form>
 
             <div v-if="selectedOt">
-              <p><strong>Date:</strong> {{ selectedOt.ot_date }}</p>
+              <p><strong>Date:</strong> {{ formatDateOnly(selectedOt.ot_date) }}</p>
               <p><strong>Start:</strong> {{ selectedOt.start_time }}</p>
               <p><strong>End:</strong> {{ selectedOt.end_time }}</p>
               <p><strong>Total Hours:</strong> {{ selectedOt.total_hours }}</p>
@@ -1004,7 +1012,7 @@
 
               <div class="flex justify-between">
                 <span class="font-medium">Date:</span>
-                <span>{{ selectedOt.ot_date }}</span>
+                <span>{{ formatDateOnly(selectedOt.ot_date) }}</span>
               </div>
 
               <div class="flex justify-between">
@@ -1013,14 +1021,28 @@
               </div>
 
               <div class="flex justify-between">
-                <span class="font-medium">End Time:</span>
-                <span>{{ selectedOt.end_time }}</span>
+                <span class="font-medium">End Date/Time:</span>
+                <span>{{ selectedOtEndDateTime }}</span>
+              </div>
+
+              <div v-if="selectedOtIsOvernight" class="flex justify-between">
+                <span class="font-medium">Note:</span>
+                <span class="text-xs font-semibold text-amber-600">
+                  Ends next day (crosses midnight)
+                </span>
               </div>
 
               <div class="flex justify-between">
                 <span class="font-medium">Total Hours:</span>
                 <span class="font-semibold text-indigo-600">
                   {{ selectedOt.total_hours }} hrs
+                </span>
+              </div>
+
+              <div class="flex justify-between">
+                <span class="font-medium">Amount:</span>
+                <span class="font-semibold text-green-600">
+                  ₱ {{ Number(selectedOtAmount || 0).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }}
                 </span>
               </div>
 
@@ -1053,7 +1075,15 @@
             </div>
 
             <!-- Footer -->
-            <div class="mt-6 text-right">
+            <div class="mt-6 flex justify-end gap-3">
+              <button
+                @click="openEditOtModal(selectedOt)"
+                class="px-4 py-2 bg-amber-500 text-white text-sm rounded hover:bg-amber-600"
+              >
+                <i class="fa-solid fa-pen-to-square mr-1"></i>
+                Edit OT
+              </button>
+
               <button
                 @click="closeOtDetailsModal"
                 class="px-4 py-2 bg-indigo-600 text-white text-sm rounded hover:bg-indigo-700"
@@ -1100,6 +1130,9 @@ const {
   selectedEmployee,
   selectedEmployment,
   selectedOt,
+  selectedOtAmount,
+  selectedOtIsOvernight,
+  selectedOtEndDateTime,
 
   payrollStartDate,
   payrollEndDate,
@@ -1117,6 +1150,8 @@ const {
   displayedSchedules,
   totalLate,
   totalUndertime,
+  totalScheduledDays,
+  totalDaysWithActual,
 
   createEmployee,
   editEmployee,
@@ -1148,6 +1183,7 @@ const {
   calculateLate,
   calculateUndertime,
   formatDate,
+  formatDateOnly,
   rowClass,
   lateClass,
   undertimeClass,
@@ -1155,8 +1191,12 @@ const {
   printPayroll,
 
   openOtModal,
+  openEditOtModal,
   closeOtModal,
   submitOt,
+  editingOtId,
+  otTotalHours,
+  otIsOvernight,
   viewOtDetails,
   closeOtDetailsModal,
 

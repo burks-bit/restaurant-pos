@@ -131,6 +131,7 @@
                 :form="newForm"
                 :pricing-schemes="pricingSchemes"
                 :pricing-rules="pricingRules"
+                :packages="packages"
                 :processing="processing"
                 :shifts="shifts"
                 :cashiersOnDuty="cashiersOnDuty"
@@ -138,6 +139,8 @@
                 @cancel="showAddModal = false"
                 @qty-change="(i) => onQtyChange(newForm.pax_breakdown, i)"
                 @scheme-change="onSchemeChange(newForm, $event)"
+                @select-package="(pkg, price) => selectPackage(newForm, pkg, price)"
+                @clear-package="clearPackage(newForm)"
               />
             </div>
           </div>
@@ -154,6 +157,7 @@
                 :form="editForm"
                 :pricing-schemes="pricingSchemes"
                 :pricing-rules="pricingRules"
+                :packages="packages"
                 :processing="processing"
                 :shifts="shifts"
                 :cashiersOnDuty="cashiersOnDuty"
@@ -161,6 +165,8 @@
                 @cancel="showEditModal = false"
                 @qty-change="(i) => onQtyChange(editForm.pax_breakdown, i)"
                 @scheme-change="onSchemeChange(editForm, $event)"
+                @select-package="(pkg, price) => selectPackage(editForm, pkg, price)"
+                @clear-package="clearPackage(editForm)"
               />
             </div>
           </div>
@@ -250,6 +256,19 @@
                   <p class="font-medium text-gray-900">{{ viewingReservation.pricing_scheme?.name ?? '-' }}</p>
                 </div>
                 <div>
+                  <p class="text-gray-500">Package</p>
+                  <p class="font-medium text-gray-900">
+                    <template v-if="viewingReservation.package">
+                      {{ viewingReservation.package.name }}
+                      <span v-if="viewingReservation.package_pax"> — {{ viewingReservation.package_pax }} pax</span>
+                      <span v-if="viewingReservation.package_price">
+                        · {{ formatCurrency(viewingReservation.package_price) }}
+                      </span>
+                    </template>
+                    <template v-else>-</template>
+                  </p>
+                </div>
+                <div>
                   <p class="text-gray-500">Reservation Fee</p>
                   <p class="font-medium text-gray-900">{{ formatCurrency(viewingReservation.reservation_fee) }}</p>
                 </div>
@@ -328,6 +347,7 @@ const is_allowed_to_void_rsvp = computed(() => page.props.auth.user?.void_rsvp ?
 const reservations = computed(() => page.props.reservations ?? [])
 const pricingSchemes = computed(() => page.props.pricing_schemes ?? [])
 const pricingRules = computed(() => page.props.pricing_rules ?? [])
+const packages = computed(() => page.props.packages ?? [])
 const availableTables = computed(() => page.props.available_tables ?? [])
 const shifts = computed(() => page.props.shifts ?? [])
 const cashiersOnDuty = computed(() => page.props.cashiersOnDuty ?? [])
@@ -372,6 +392,7 @@ const {
   newForm, editForm, arrivalForm,
   filteredReservations,
   totalPax, totalEstimated, onQtyChange,
+  selectPackage, clearPackage,
   openAddModal, openEditModal, openArrivalModal, goToAdmission,
   saveReservation, updateReservation, deleteReservation, assignTable,
   formatDateTime, statusClass, formatCurrency,

@@ -41,6 +41,12 @@
         td {
             padding: 5px;
         }
+        .sales-table {
+            font-size: 9px;
+        }
+        .sales-table th, .sales-table td {
+            padding: 3px;
+        }
         .right {
             text-align: right;
         }
@@ -68,6 +74,11 @@
             border: 1px solid #93c5fd;
             background: #dbeafe;
             color: #1d4ed8;
+        }
+        .badge-package {
+            border: 1px solid #c4b5fd;
+            background: #ede9fe;
+            color: #6d28d9;
         }
         .sold-drinks {
             margin-bottom: 24px;
@@ -109,6 +120,9 @@
         <p><strong>Gross Sales:</strong> ₱{{ number_format($grossSales, 2) }}</p>
         <p><strong>Cash Sales:</strong> ₱{{ number_format($totalCashSales, 2) }}</p>
         <p><strong>GCash Sales:</strong> ₱{{ number_format($totalGcashSales, 2) }}</p>
+        <p><strong>Add'l Pax Charges:</strong> ₱{{ number_format($additionalPaxTotal ?? 0, 2) }}</p>
+        <p><strong>Time Extension:</strong> ₱{{ number_format($timeExtensionTotal ?? 0, 2) }}</p>
+        <p><strong>SC/PWD Pax:</strong> {{ $seniorPaxTotal ?? 0 }}</p>
         <p><strong>Reservation Fee:</strong> ₱{{ number_format($totalReservationFee, 2) }}</p>
         <p><strong>Total Expenses:</strong> ₱{{ number_format($totalExpenses, 2) }}</p>
         <p><strong>Net Sales (After Expenses):</strong> ₱{{ number_format($netSales, 2) }}</p>
@@ -153,7 +167,7 @@
     @endif
     {{-- ─────────────────────────────────────────────────────────────────── --}}
 
-    <table>
+    <table class="sales-table">
         <thead>
             <tr>
                 <th>#</th>
@@ -163,6 +177,9 @@
                 <th>Customer Name</th>
                 <th>No. of Pax</th>
                 <th class="right">Amount</th>
+                <th class="right">Add'l Pax Charge</th>
+                <th class="right">Time Extension</th>
+                <th class="right">SC/PWD Pax</th>
                 <th class="right">Gcash Payment Amount</th>
                 <th class="right">Cash Payment Amount</th>
                 <th class="right">Total Gross Sales</th>
@@ -215,12 +232,20 @@
                             <span class="badge badge-single">Single Order</span>
                         </td>
                     @else
-                        <td>{{ $order->tableSession->table->name ?? $order->table_number ?? '—' }}</td>
+                        <td>
+                            {{ $order->tableSession->table->name ?? $order->table_number ?? '—' }}
+                            @if($order->package_id || $order->package_name)
+                                <span class="badge badge-package">Package{{ $order->package_name ? ': ' . $order->package_name : '' }}</span>
+                            @endif
+                        </td>
                         <td>{{ $order->tableSession->customer_name ?? '-' }}</td>
                         <td>{{ $order->tableSession->pax ?? '-' }}</td>
                     @endif
 
                     <td class="right">₱{{ number_format($gross, 2) }}</td>
+                    <td class="right">{{ ($isReservationOrder || $isSingleOrder) ? '—' : '₱' . number_format((float) ($order->additional_pax_amount ?? 0), 2) }}</td>
+                    <td class="right">{{ ($isReservationOrder || $isSingleOrder) ? '—' : '₱' . number_format((float) ($order->time_extension_amount ?? 0), 2) }}</td>
+                    <td class="right">{{ ($isReservationOrder || $isSingleOrder) ? '—' : (int) ($order->senior_pax ?? 0) }}</td>
                     <td class="right">₱{{ number_format($gcashAmount, 2) }}</td>
                     <td class="right">₱{{ number_format($cashAmount, 2) }}</td>
                     <td class="right">₱{{ number_format($gross, 2) }}</td>
@@ -232,7 +257,7 @@
 
             @empty
                 <tr>
-                    <td colspan="12" style="text-align:center;">No records found</td>
+                    <td colspan="15" style="text-align:center;">No records found</td>
                 </tr>
             @endforelse
         </tbody>

@@ -1,6 +1,29 @@
 <template>
   <form class="space-y-4" @submit.prevent="$emit('submit')">
 
+    <!-- Reservation mode switch -->
+    <div>
+      <label class="block text-sm font-medium text-gray-700 mb-1">Reservation type</label>
+      <div class="inline-flex rounded-lg border border-gray-300 overflow-hidden">
+        <button
+          type="button"
+          class="px-4 py-2 text-sm flex items-center gap-2"
+          :class="form.mode === 'scheme' ? 'bg-blue-600 text-white' : 'bg-white text-gray-700 hover:bg-gray-50'"
+          @click="form.mode = 'scheme'"
+        >
+          <i class="fa fa-percent"></i> Price Scheme
+        </button>
+        <button
+          type="button"
+          class="px-4 py-2 text-sm flex items-center gap-2 border-l border-gray-300"
+          :class="form.mode === 'package' ? 'bg-blue-600 text-white' : 'bg-white text-gray-700 hover:bg-gray-50'"
+          @click="form.mode = 'package'"
+        >
+          <i class="fa fa-box-open"></i> Package
+        </button>
+      </div>
+    </div>
+
     <div class="grid grid-cols-2 gap-x-8 gap-y-4">
 
       <!-- LEFT COLUMN -->
@@ -74,8 +97,8 @@
           />
         </div>
 
-        <!-- Pricing scheme -->
-        <div>
+        <!-- Pricing scheme (scheme mode only) -->
+        <div v-if="form.mode === 'scheme'">
           <label class="block text-sm font-medium text-gray-700 mb-1">Pricing scheme</label>
           <select
             v-model="form.pricing_scheme_id"
@@ -173,8 +196,71 @@
       </div>
     </div>
 
-    <!-- Pax breakdown: full width, only when a pricing scheme is selected -->
-    <div v-if="form.pricing_scheme_id && schemeFilteredBreakdown.length">
+    <!-- Packages (package mode only) -->
+    <div v-if="form.mode === 'package'" class="border rounded p-3 bg-gray-50">
+      <div class="flex items-center justify-between flex-wrap gap-2">
+        <div>
+          <p class="text-sm font-medium text-gray-700">Package</p>
+          <p class="text-xs text-gray-500">
+            <template v-if="selectedPackage">
+              {{ selectedPackage.name }}
+              <span v-if="form.package_pax"> — {{ form.package_pax }} pax</span>
+              <span v-if="form.package_price !== null && form.package_price !== ''">
+                · {{ formatCurrency(form.package_price) }}
+              </span>
+            </template>
+            <template v-else>No package selected</template>
+          </p>
+        </div>
+
+        <div class="flex gap-2">
+          <button
+            type="button"
+            class="flex items-center gap-1 px-3 py-1.5 text-sm bg-blue-600 text-white rounded hover:bg-blue-700"
+            @click="showPackageModal = true"
+          >
+            <i class="fa fa-box-open"></i> Select Packages
+          </button>
+          <button
+            v-if="form.package_id"
+            type="button"
+            class="px-3 py-1.5 text-sm bg-gray-200 rounded hover:bg-gray-300"
+            @click="$emit('clear-package')"
+          >
+            Clear
+          </button>
+        </div>
+      </div>
+
+      <!-- Selected package details -->
+      <div v-if="selectedPackage" class="mt-3 border-t pt-3 text-sm">
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          <div>
+            <p class="text-gray-500 text-xs">Package name</p>
+            <p class="font-medium text-gray-900">{{ selectedPackage.name }}</p>
+          </div>
+          <div v-if="form.package_pax">
+            <p class="text-gray-500 text-xs">Pax</p>
+            <p class="font-medium text-gray-900">{{ form.package_pax }}</p>
+          </div>
+          <div v-if="form.package_price !== null && form.package_price !== ''">
+            <p class="text-gray-500 text-xs">Package price</p>
+            <p class="font-medium text-gray-900">{{ formatCurrency(form.package_price) }}</p>
+          </div>
+          <div v-if="selectedPackage.choices" class="sm:col-span-2">
+            <p class="text-gray-500 text-xs">Choices</p>
+            <p class="font-medium text-gray-900">{{ selectedPackage.choices }}</p>
+          </div>
+          <div v-if="selectedPackage.description" class="sm:col-span-2">
+            <p class="text-gray-500 text-xs">Description</p>
+            <p class="text-gray-700">{{ selectedPackage.description }}</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Pax breakdown: full width, scheme mode with a selected scheme -->
+    <div v-if="form.mode === 'scheme' && form.pricing_scheme_id && schemeFilteredBreakdown.length">
       <label class="block text-sm font-medium text-gray-700 mb-2">Pax per category</label>
       <div class="border rounded overflow-hidden">
         <table class="w-full text-sm">
@@ -213,7 +299,7 @@
         </table>
       </div>
     </div>
-    <p v-else-if="!form.pricing_scheme_id" class="text-sm text-gray-400 italic">
+    <p v-else-if="form.mode === 'scheme' && !form.pricing_scheme_id" class="text-sm text-gray-400 italic">
       Select a pricing scheme to configure pax.
     </p>
 
@@ -233,16 +319,84 @@
         <i class="fa fa-save"></i> Save
       </button>
     </div>
+
+    <!-- Select Packages dialog -->
+    <Teleport to="body">
+      <div
+        v-if="showPackageModal"
+        class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+      >
+        <div class="bg-white rounded-lg w-full max-w-2xl p-6 max-h-[90vh] overflow-y-auto">
+          <div class="flex justify-between items-center mb-4">
+            <h2 class="text-lg font-semibold text-gray-900 flex items-center gap-2">
+              <i class="fa fa-box-open"></i> Select Package
+            </h2>
+            <button class="text-gray-400 hover:text-gray-600" @click="showPackageModal = false">
+              <i class="fa fa-times"></i>
+            </button>
+          </div>
+
+          <p v-if="!packages.length" class="text-sm text-gray-400">
+            No packages available.
+          </p>
+
+          <div class="space-y-3">
+            <div v-for="pkg in packages" :key="pkg.id" class="border rounded p-3">
+              <div class="flex justify-between items-start gap-2">
+                <div>
+                  <p class="font-medium text-gray-900">{{ pkg.name }}</p>
+                  <p v-if="pkg.choices" class="text-xs text-gray-500">Choices: {{ pkg.choices }}</p>
+                  <p v-if="pkg.description" class="text-xs text-gray-500">{{ pkg.description }}</p>
+                </div>
+                <span
+                  v-if="form.package_id === pkg.id"
+                  class="px-2 py-0.5 text-xs bg-green-100 text-green-700 rounded-full whitespace-nowrap"
+                >
+                  <i class="fa fa-check"></i> Selected
+                </span>
+              </div>
+
+              <div class="flex flex-wrap gap-2 mt-2">
+                <button
+                  v-for="price in pkg.prices"
+                  :key="price.id"
+                  type="button"
+                  class="px-3 py-1 text-xs rounded border"
+                  :class="(form.package_id === pkg.id && form.package_pax === price.pax)
+                    ? 'bg-blue-600 text-white border-blue-600'
+                    : 'bg-white text-gray-700 border-gray-300 hover:bg-blue-50'"
+                  @click="choosePackage(pkg, price)"
+                >
+                  {{ price.pax }} pax — {{ formatCurrency(price.price) }}
+                </button>
+                <span v-if="!pkg.prices?.length" class="text-xs text-gray-400">No prices</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="flex justify-end mt-6">
+            <button
+              type="button"
+              class="px-4 py-2 bg-gray-200 rounded hover:bg-gray-300 text-sm"
+              @click="showPackageModal = false"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
   </form>
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, ref, watch } from 'vue'
 
 const props = defineProps({
   form: { type: Object, required: true },
   pricingSchemes: { type: Array, default: () => [] },
   pricingRules: { type: Array, default: () => [] },
+  packages: { type: Array, default: () => [] },
   shifts: { type: Array, default: () => [] },
   cashiersOnDuty: { type: Array, default: () => [] },
   processing: { type: Boolean, default: false },
@@ -260,7 +414,31 @@ const formatTime = (t) => {
   return `${hour12}:${m} ${ampm}`
 }
 
-defineEmits(['submit', 'cancel', 'qty-change', 'scheme-change'])
+const emit = defineEmits(['submit', 'cancel', 'qty-change', 'scheme-change', 'select-package', 'clear-package'])
+
+const showPackageModal = ref(false)
+
+const selectedPackage = computed(() =>
+  props.packages.find((pkg) => pkg.id === props.form.package_id) ?? null,
+)
+
+const choosePackage = (pkg, price) => {
+  emit('select-package', pkg, price)
+  showPackageModal.value = false
+}
+
+// Clear the fields of the mode being left so the two modes never mix.
+watch(
+  () => props.form.mode,
+  (mode) => {
+    if (mode === 'package') {
+      props.form.pricing_scheme_id = ''
+      props.form.pax_breakdown = []
+    } else {
+      emit('clear-package')
+    }
+  },
+)
 
 const totalPax = computed(() =>
   props.form.pax_breakdown.reduce((s, r) => s + (parseInt(r.qty) || 0), 0),

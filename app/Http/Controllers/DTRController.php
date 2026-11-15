@@ -86,6 +86,18 @@ class DTRController extends Controller
         }
     }
 
+    public function updateOvertime(Request $request, $id)
+    {
+        try {
+            return $this->dtrService->updateOvertime($request, $id);
+        } catch (\Throwable $e) {
+            Log::error('DTRController@updateOvertime failed: ' . $e->getMessage());
+            return response()->json([
+                'message' => 'Failed to update overtime.'
+            ], 500);
+        }
+    }
+
     public function filterAllEmployeeOvertime(Request $request)
     {
         try {
