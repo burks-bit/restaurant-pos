@@ -78,6 +78,22 @@ export function useExpensesIndex() {
     }
   }
 
+  const generateExcelReport = () => {
+    if (expenses.value.length === 0) {
+      alert('No data to export.')
+      return
+    }
+
+    const url = route(`${prefix.value}.expenses.export-expenses-excel`, {
+      search: search.value,
+      category: selectedCategory.value || '',
+      start_date: startDate.value,
+      end_date: endDate.value,
+    })
+
+    window.location.href = url
+  }
+
   const deleteExpense = (id) => {
     if (confirm('Are you sure?')) {
       router.delete(route('expenses.destroy', id))
@@ -104,6 +120,7 @@ export function useExpensesIndex() {
     closeAddExpenseModal,
     submitExpense,
     applyFilters,
+    generateExcelReport,
     deleteExpense,
   }
 }

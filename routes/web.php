@@ -13,6 +13,8 @@ use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\HeadPricingRuleController;
 use App\Http\Controllers\EmployeeController;
 use App\Http\Controllers\DeductionTemplateController;
+use App\Http\Controllers\DeductionTypeController;
+use App\Http\Controllers\EarningTypeController;
 use App\Http\Controllers\PackageController;
 use App\Http\Controllers\VoucherController;
 use App\Http\Controllers\BranchController;
@@ -257,6 +259,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     $expenseRoutes = function () {
         Route::get('/expenses', [ExpenseController::class, 'index'])->name('expenses');
+        Route::get('/expenses/export-excel', [ExpenseController::class, 'exportExpensesExcel'])->name('expenses.export-expenses-excel');
         Route::post('/expenses/fetch-filtered-expenses', [ExpenseController::class, 'getFilteredExpenses'])->name('expenses.fetch-filtered-expenses');
         Route::post('/expenses/store', [ExpenseController::class, 'store'])->name('expenses.store');
         Route::get('/cashier_expenses', [ExpenseController::class, 'cashierExpenseIndex'])->name('cashier_expenses');
@@ -389,6 +392,16 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('/tables/store', [TableController::class, 'store'])->name('tables.store');
         Route::put('/tables/update/{table}', [TableController::class, 'update'])->name('tables.update');
         Route::delete('/tables/destroy/{table}', [TableController::class, 'destroy'])->name('tables.destroy');
+
+        Route::get('/earning-types', [EarningTypeController::class, 'index'])->name('earning-types.index');
+        Route::post('/earning-types', [EarningTypeController::class, 'store'])->name('earning-types.store');
+        Route::put('/earning-types/{earningType}', [EarningTypeController::class, 'update'])->name('earning-types.update');
+        Route::delete('/earning-types/{earningType}', [EarningTypeController::class, 'destroy'])->name('earning-types.destroy');
+
+        Route::get('/deduction-types', [DeductionTypeController::class, 'index'])->name('deduction-types.index');
+        Route::post('/deduction-types', [DeductionTypeController::class, 'store'])->name('deduction-types.store');
+        Route::put('/deduction-types/{deductionType}', [DeductionTypeController::class, 'update'])->name('deduction-types.update');
+        Route::delete('/deduction-types/{deductionType}', [DeductionTypeController::class, 'destroy'])->name('deduction-types.destroy');
 
         Route::get('/branches', [BranchController::class, 'index'])->name('branches');
 

@@ -55,12 +55,21 @@
             </button>
           </div>
 
-          <button
-            class="flex items-center gap-1 text-sm bg-blue-600 text-white px-3 py-1.5 rounded hover:bg-blue-700"
-            @click="openAddExpenseModal"
-          >
-            <i class="fa fa-plus"></i> Add Expense
-          </button>
+          <div class="flex gap-2">
+            <button
+              class="flex items-center gap-1 text-sm bg-green-600 text-white px-3 py-1.5 rounded hover:bg-green-700"
+              @click="generateExcelReport"
+            >
+              <i class="fa fa-file-excel"></i> Export Excel
+            </button>
+
+            <button
+              class="flex items-center gap-1 text-sm bg-blue-600 text-white px-3 py-1.5 rounded hover:bg-blue-700"
+              @click="openAddExpenseModal"
+            >
+              <i class="fa fa-plus"></i> Add Expense
+            </button>
+          </div>
         </div>
 
         <div class="bg-white rounded-lg shadow overflow-auto max-h-[60vh]">
@@ -200,6 +209,7 @@ const {
   closeAddExpenseModal,
   submitExpense,
   applyFilters,
+  generateExcelReport,
   deleteExpense,
 } = useExpensesIndex()
 </script>

@@ -122,9 +122,21 @@ const postExpenseOpen = ref(false)
       <transition enter-active-class="transition-all duration-300" enter-from-class="opacity-0 max-h-0" enter-to-class="opacity-100 max-h-40" leave-active-class="transition-all duration-200" leave-from-class="opacity-100 max-h-40" leave-to-class="opacity-0 max-h-0">
         <ul v-show="employeeOpen" class="overflow-hidden space-y-1">
           <li>
+            <Link :href="route('finance.employees.daily-logs')" class="pl-8 block px-2 py-1.5 rounded-base hover:bg-gray-200 flex items-center space-x-2">
+              <i class="fa fa-clock"></i>
+              <span>Logs</span>
+            </Link>
+          </li>
+          <li>
             <Link :href="route('finance.employees.index')" class="pl-8 block px-2 py-1.5 rounded-base hover:bg-gray-200 flex items-center space-x-2">
               <i class="fa fa-id-badge"></i>
               <span>Employees</span>
+            </Link>
+          </li>
+          <li>
+            <Link :href="route('finance.deduction-templates.index')" class="pl-8 block px-2 py-1.5 rounded-base hover:bg-gray-200 flex items-center space-x-2">
+              <i class="fa fa-file-invoice"></i>
+              <span>Deduction Templates</span>
             </Link>
           </li>
         </ul>

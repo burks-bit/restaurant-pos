@@ -15,13 +15,12 @@ const role = computed(() => user?.role ?? null)
 
 // Collapsible states (local only for submenus)
 const posOpen = ref(false)
+const frontdoorOpen = ref(false)
 const managementOpen = ref(false)
-const inventoryOpen = ref(false)
-const expensesOpen = ref(false)
+const hrOpen = ref(false)
+const financeOpen = ref(false)
 const reportsOpen = ref(false)
 const biometrixOpen = ref(false)
-const dtrOpen = ref(false)
-const employeeOpen = ref(false)
 
 // Toggle parent-controlled menu
 const toggle = () => {
@@ -39,16 +38,6 @@ const toggle = () => {
         <span>Dashboard</span>
       </Link>
 
-      <Link :href="route('frontdoor.reservations.index')" class="flex items-center w-full px-3 py-2 rounded-base hover:bg-gray-200 hover:text-fg-brand space-x-2">
-        <i class="fa fa-list"></i>
-        <span>Reservations</span>
-      </Link>
-
-      <Link :href="route('admin.packages.index')" class="flex items-center w-full px-3 py-2 rounded-base hover:bg-gray-200 hover:text-fg-brand space-x-2">
-        <i class="fa fa-box-open"></i>
-        <span>Packages</span>
-      </Link>
-
       <!-- POS -->
       <button
         @click="posOpen = !posOpen"
@@ -57,7 +46,7 @@ const toggle = () => {
       >
         <div class="flex items-center space-x-2">
           <i class="fa fa-cash-register"></i>
-          <span>POS Access</span>
+          <span>POS</span>
         </div>
         <svg :class="['w-4 h-4 transition-transform', posOpen ? 'rotate-180' : '']"
           viewBox="0 0 24 24" fill="none">
@@ -88,10 +77,52 @@ const toggle = () => {
               <span>Orders</span>
             </Link>
           </li>
+          <li>
+            <Link :href="route('admin.packages.index')" class="pl-8 block px-2 py-1.5 rounded-base hover:bg-gray-200 flex items-center space-x-2">
+              <i class="fa fa-box-open"></i>
+              <span>Packages</span>
+            </Link>
+          </li>
         </ul>
       </transition>
 
-      <!-- MANAGEMENT -->
+      <!-- FRONTDOOR -->
+      <button
+        @click="frontdoorOpen = !frontdoorOpen"
+        type="button"
+        class="flex items-center w-full justify-between px-3 py-2 rounded-base hover:bg-gray-200 hover:text-fg-brand"
+      >
+        <div class="flex items-center space-x-2">
+          <i class="fa fa-door-open"></i>
+          <span>Frontdoor</span>
+        </div>
+        <svg :class="['w-4 h-4 transition-transform', frontdoorOpen ? 'rotate-180' : '']"
+          viewBox="0 0 24 24" fill="none">
+          <path stroke="currentColor" stroke-width="2"
+            stroke-linecap="round" stroke-linejoin="round"
+            d="m19 9-7 7-7-7"/>
+        </svg>
+      </button>
+
+      <transition
+        enter-active-class="transition-all duration-300"
+        enter-from-class="opacity-0 max-h-0"
+        enter-to-class="opacity-100 max-h-40"
+        leave-active-class="transition-all duration-200"
+        leave-from-class="opacity-100 max-h-40"
+        leave-to-class="opacity-0 max-h-0"
+      >
+        <ul v-show="frontdoorOpen" class="overflow-hidden space-y-1">
+          <li>
+            <Link :href="route('frontdoor.reservations.index')" class="pl-8 block px-2 py-1.5 rounded-base hover:bg-gray-200 flex items-center space-x-2">
+              <i class="fa fa-calendar-check"></i>
+              <span>Reservations</span>
+            </Link>
+          </li>
+        </ul>
+      </transition>
+
+      <!-- MANAGEMENT (keep as is) -->
       <button
         @click="managementOpen = !managementOpen"
         type="button"
@@ -112,15 +143,17 @@ const toggle = () => {
       <transition
         enter-active-class="transition-all duration-300"
         enter-from-class="opacity-0 max-h-0"
-        enter-to-class="opacity-100 max-h-60"
+        enter-to-class="opacity-100 max-h-72"
         leave-active-class="transition-all duration-200"
-        leave-from-class="opacity-100 max-h-60"
+        leave-from-class="opacity-100 max-h-72"
         leave-to-class="opacity-0 max-h-0"
       >
         <ul v-show="managementOpen" class="overflow-hidden space-y-1">
           <!-- <li><Link :href="route('admin.menus')" class="pl-8 block px-2 py-1.5 rounded-base hover:bg-gray-200 flex items-center space-x-2"><i class="fa fa-utensils"></i><span>Menus</span></Link></li> -->
           <li><Link :href="route('admin.users')" class="pl-8 block px-2 py-1.5 rounded-base hover:bg-gray-200 flex items-center space-x-2"><i class="fa fa-user"></i><span>Accounts</span></Link></li>
           <li><Link :href="route('admin.tables')" class="pl-8 block px-2 py-1.5 rounded-base hover:bg-gray-200 flex items-center space-x-2"><i class="fa fa-table"></i><span>Tables</span></Link></li>
+          <li><Link :href="route('admin.earning-types.index')" class="pl-8 block px-2 py-1.5 rounded-base hover:bg-gray-200 flex items-center space-x-2"><i class="fa fa-plus-circle"></i><span>Earning Types</span></Link></li>
+          <li><Link :href="route('admin.deduction-types.index')" class="pl-8 block px-2 py-1.5 rounded-base hover:bg-gray-200 flex items-center space-x-2"><i class="fa fa-minus-circle"></i><span>Deduction Types</span></Link></li>
           <li><Link :href="route('admin.branches')" class="pl-8 block px-2 py-1.5 rounded-base hover:bg-gray-200 flex items-center space-x-2"><i class="fa fa-building"></i><span>Branches</span></Link></li>
           <li><Link :href="route('admin.head-pricing-rules.index')" class="pl-8 block px-2 py-1.5 rounded-base hover:bg-gray-200 flex items-center space-x-2"><i class="fa fa-percent"></i><span>Pricing Schemes</span></Link></li>
           <li><Link :href="route('admin.vouchers.index')" class="pl-8 block px-2 py-1.5 rounded-base hover:bg-gray-200 flex items-center space-x-2"><i class="fa fa-gift"></i><span>Gift Vouchers</span></Link></li>
@@ -132,17 +165,17 @@ const toggle = () => {
         <span>Configurations</span>
       </Link>
 
-      <!-- EMPLOYEE -->
+      <!-- HR -->
       <button
-        @click="employeeOpen = !employeeOpen"
+        @click="hrOpen = !hrOpen"
         type="button"
         class="flex items-center w-full justify-between px-3 py-2 rounded-base hover:bg-gray-200 hover:text-fg-brand"
       >
         <div class="flex items-center space-x-2">
           <i class="fa fa-users"></i>
-          <span>Employee</span>
+          <span>HR</span>
         </div>
-        <svg :class="['w-4 h-4 transition-transform', employeeOpen ? 'rotate-180' : '']"
+        <svg :class="['w-4 h-4 transition-transform', hrOpen ? 'rotate-180' : '']"
           viewBox="0 0 24 24" fill="none">
           <path stroke="currentColor" stroke-width="2"
             stroke-linecap="round" stroke-linejoin="round"
@@ -158,74 +191,42 @@ const toggle = () => {
         leave-from-class="opacity-100 max-h-40"
         leave-to-class="opacity-0 max-h-0"
       >
-        <ul v-show="employeeOpen" class="overflow-hidden space-y-1">
+        <ul v-show="hrOpen" class="overflow-hidden space-y-1">
           <li>
-            <Link :href="route('admin.employees.index')" 
+            <Link :href="route('admin.employees.daily-logs')"
+              class="pl-8 block px-2 py-1.5 rounded-base hover:bg-gray-200 flex items-center space-x-2">
+              <i class="fa fa-clock"></i>
+              <span>Logs</span>
+            </Link>
+          </li>
+          <li>
+            <Link :href="route('admin.employees.index')"
               class="pl-8 block px-2 py-1.5 rounded-base hover:bg-gray-200 flex items-center space-x-2">
               <i class="fa fa-user"></i>
               <span>Employees</span>
             </Link>
           </li>
-          <!-- <li>
-              <Link :href="route('admin.employees.overtimes')" class="pl-8 block px-2 py-1.5 rounded-base hover:bg-gray-200 flex items-center space-x-2">
-                <i class="fa fa-clock"></i>
-                <span>Overtime Requests</span>
-              </Link>
-          </li>
           <li>
-            <Link :href="route('admin.users')" 
+            <Link :href="route('admin.deduction-templates.index')"
               class="pl-8 block px-2 py-1.5 rounded-base hover:bg-gray-200 flex items-center space-x-2">
-              <i class="fa fa-id-badge"></i>
-              <span>User Accounts</span>
+              <i class="fa fa-file-invoice"></i>
+              <span>Deduction Templates</span>
             </Link>
-          </li> -->
+          </li>
         </ul>
       </transition>
 
-      <!-- INVENTORY -->
+      <!-- FINANCE -->
       <button
-        @click="inventoryOpen = !inventoryOpen"
-        type="button"
-        class="flex items-center w-full justify-between px-3 py-2 rounded-base hover:bg-gray-200 hover:text-fg-brand"
-      >
-        <div class="flex items-center space-x-2">
-          <i class="fa fa-boxes"></i>
-          <span>Inventory</span>
-        </div>
-        <svg :class="['w-4 h-4 transition-transform', inventoryOpen ? 'rotate-180' : '']"
-          viewBox="0 0 24 24" fill="none">
-          <path stroke="currentColor" stroke-width="2"
-            stroke-linecap="round" stroke-linejoin="round"
-            d="m19 9-7 7-7-7"/>
-        </svg>
-      </button>
-
-      <transition
-        enter-active-class="transition-all duration-300"
-        enter-from-class="opacity-0 max-h-0"
-        enter-to-class="opacity-100 max-h-60"
-        leave-active-class="transition-all duration-200"
-        leave-from-class="opacity-100 max-h-60"
-        leave-to-class="opacity-0 max-h-0"
-      >
-        <ul v-show="inventoryOpen" class="overflow-hidden space-y-1">
-          <li><Link :href="route('admin.inventory.categories')" class="pl-8 block px-2 py-1.5 rounded-base hover:bg-gray-200 flex items-center space-x-2"><i class="fa fa-tags"></i><span>Categories</span></Link></li>
-          <li><Link :href="route('admin.inventory.items')" class="pl-8 block px-2 py-1.5 rounded-base hover:bg-gray-200 flex items-center space-x-2"><i class="fa fa-box"></i><span>Inventory Items</span></Link></li>
-          <li><Link :href="route('admin.inventory')" class="pl-8 block px-2 py-1.5 rounded-base hover:bg-gray-200 flex items-center space-x-2"><i class="fa fa-list-alt"></i><span>Inventory Summary</span></Link></li>
-        </ul>
-      </transition>
-
-      <button
-        @click="dtrOpen = !dtrOpen"
+        @click="financeOpen = !financeOpen"
         type="button"
         class="flex items-center w-full justify-between px-3 py-2 rounded-base hover:bg-gray-200 hover:text-fg-brand"
       >
         <div class="flex items-center space-x-2">
           <i class="fa fa-money-check-dollar"></i>
-          <span>Payroll</span>
+          <span>Finance</span>
         </div>
-
-        <svg :class="['w-4 h-4 transition-transform', dtrOpen ? 'rotate-180' : '']"
+        <svg :class="['w-4 h-4 transition-transform', financeOpen ? 'rotate-180' : '']"
           viewBox="0 0 24 24" fill="none">
           <path stroke="currentColor" stroke-width="2"
             stroke-linecap="round" stroke-linejoin="round"
@@ -236,16 +237,15 @@ const toggle = () => {
       <transition
         enter-active-class="transition-all duration-300"
         enter-from-class="opacity-0 max-h-0"
-        enter-to-class="opacity-100 max-h-40"
+        enter-to-class="opacity-100 max-h-96"
         leave-active-class="transition-all duration-200"
-        leave-from-class="opacity-100 max-h-40"
+        leave-from-class="opacity-100 max-h-96"
         leave-to-class="opacity-0 max-h-0"
       >
-        <ul v-show="dtrOpen" class="overflow-hidden space-y-1">
-          
+        <ul v-show="financeOpen" class="overflow-hidden space-y-1">
           <li>
             <Link
-              :href="route('admin.generate-payroll')" 
+              :href="route('admin.generate-payroll')"
               class="pl-8 block px-2 py-1.5 rounded-base hover:bg-gray-200 flex items-center space-x-2"
             >
               <i class="fa fa-calculator"></i>
@@ -255,7 +255,7 @@ const toggle = () => {
 
           <li>
             <Link
-              :href="route('admin.payroll.index')" 
+              :href="route('admin.payroll.index')"
               class="pl-8 block px-2 py-1.5 rounded-base hover:bg-gray-200 flex items-center space-x-2"
             >
               <i class="fa fa-file-invoice-dollar"></i>
@@ -263,37 +263,45 @@ const toggle = () => {
             </Link>
           </li>
 
-        </ul>
-      </transition>
+          <li>
+            <Link
+              :href="route('admin.inventory.categories')"
+              class="pl-8 block px-2 py-1.5 rounded-base hover:bg-gray-200 flex items-center space-x-2"
+            >
+              <i class="fa fa-tags"></i>
+              <span>Inv. Categories</span>
+            </Link>
+          </li>
 
-      <!-- EXPENSES -->
-      <button
-        @click="expensesOpen = !expensesOpen"
-        type="button"
-        class="flex items-center w-full justify-between px-3 py-2 rounded-base hover:bg-gray-200 hover:text-fg-brand"
-      >
-        <div class="flex items-center space-x-2">
-          <i class="fa fa-file-invoice-dollar"></i>
-          <span>Expenses</span>
-        </div>
-        <svg :class="['w-4 h-4 transition-transform', expensesOpen ? 'rotate-180' : '']"
-          viewBox="0 0 24 24" fill="none">
-          <path stroke="currentColor" stroke-width="2"
-            stroke-linecap="round" stroke-linejoin="round"
-            d="m19 9-7 7-7-7"/>
-        </svg>
-      </button>
+          <li>
+            <Link
+              :href="route('admin.inventory.items')"
+              class="pl-8 block px-2 py-1.5 rounded-base hover:bg-gray-200 flex items-center space-x-2"
+            >
+              <i class="fa fa-box"></i>
+              <span>Inv. Items</span>
+            </Link>
+          </li>
 
-      <transition
-        enter-active-class="transition-all duration-300"
-        enter-from-class="opacity-0 max-h-0"
-        enter-to-class="opacity-100 max-h-40"
-        leave-active-class="transition-all duration-200"
-        leave-from-class="opacity-100 max-h-40"
-        leave-to-class="opacity-0 max-h-0"
-      >
-        <ul v-show="expensesOpen" class="overflow-hidden space-y-1">
-          <li><Link :href="route('admin.expenses')" class="pl-8 block px-2 py-1.5 rounded-base hover:bg-gray-200 flex items-center space-x-2"><i class="fa fa-money-bill"></i><span>Expenses</span></Link></li>
+          <li>
+            <Link
+              :href="route('admin.inventory')"
+              class="pl-8 block px-2 py-1.5 rounded-base hover:bg-gray-200 flex items-center space-x-2"
+            >
+              <i class="fa fa-list-alt"></i>
+              <span>Inv. Summary</span>
+            </Link>
+          </li>
+
+          <li>
+            <Link
+              :href="route('admin.expenses')"
+              class="pl-8 block px-2 py-1.5 rounded-base hover:bg-gray-200 flex items-center space-x-2"
+            >
+              <i class="fa fa-money-bill"></i>
+              <span>Expenses</span>
+            </Link>
+          </li>
         </ul>
       </transition>
 
@@ -324,7 +332,7 @@ const toggle = () => {
         leave-to-class="opacity-0 max-h-0"
       >
         <ul v-show="reportsOpen" class="overflow-hidden space-y-1">
-          
+
           <li>
             <!-- <Link :href="route('admin.reports.daily-sales')" class="pl-8 block px-2 py-1.5 rounded-base hover:bg-gray-200 flex items-center space-x-2"> -->
             <Link :href="route('admin.sales.report.index')" class="pl-8 block px-2 py-1.5 rounded-base hover:bg-gray-200 flex items-center space-x-2">
@@ -383,7 +391,7 @@ const toggle = () => {
         leave-to-class="opacity-0 max-h-0"
       >
         <ul v-show="biometrixOpen" class="overflow-hidden space-y-1">
-          
+
           <li>
             <!-- <Link :href="route('admin.reports.daily-sales')" class="pl-8 block px-2 py-1.5 rounded-base hover:bg-gray-200 flex items-center space-x-2"> -->
             <Link :href="route('admin.myrecords')" class="pl-8 block px-2 py-1.5 rounded-base hover:bg-gray-200 flex items-center space-x-2">
@@ -393,7 +401,7 @@ const toggle = () => {
           </li>
         </ul>
       </transition>
-      
+
     </div>
 
     <!-- MOBILE SIMPLE -->

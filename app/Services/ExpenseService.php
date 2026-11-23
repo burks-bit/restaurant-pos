@@ -6,10 +6,12 @@ use Illuminate\Http\Request;
 use App\Models\Expense;
 use App\Models\ExpenseCategory;
 use App\Models\Shift;
+use App\Exports\ExpensesExport;
 use Inertia\Inertia;
 use Illuminate\Support\Facades\Log;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Auth;
+use Maatwebsite\Excel\Facades\Excel;
 
 class ExpenseService
 {
@@ -85,6 +87,7 @@ class ExpenseService
 
         return Inertia::render('Expenses/CashierExpensePage', [
             'expenses'      => $expenses,
+            'categories'    => ExpenseCategory::where('status', 1)->get(),
             'current_shift' => $current_shift,
             'today'         => $now->toDateString(),
         ]);
@@ -92,23 +95,27 @@ class ExpenseService
 
     public function store(Request $request)
     {
-        // 🔥 FORCE category = 5 if shift_id exists
-        if ($request->filled('shift_id')) {
+        // Default cashier/shift expenses to "Others" only when no category is provided
+        if ($request->filled('shift_id') && !$request->filled('expense_category_id')) {
             $request->merge([
                 'expense_category_id' => 5
             ]);
         }
 
         $request->validate([
-            'expense_category_id' => 'required|integer',
+            'expense_category_id' => 'required|integer|exists:expense_categories,id',
+            'requesting_name' => 'nullable|string|max:255',
             'description' => 'required|string',
             'amount' => 'required|numeric|min:0',
+            'account_title' => 'nullable|string|max:255',
         ]);
 
         Expense::create([
             'expense_category_id' => $request->expense_category_id,
+            'requesting_name' => $request->requesting_name,
             'description' => $request->description,
             'amount' => $request->amount,
+            'account_title' => $request->account_title,
             'expense_date' => now()->toDateString(),
             'shift_id' => $request->shift_id,
             'created_by' => auth()->id(),
@@ -120,10 +127,19 @@ class ExpenseService
 
     public function getFilteredExpenses(Request $request)
     {
-        $search = $request->search;
-        $category = $request->category;
-        $startDate = $request->start_date;
-        $endDate = $request->end_date;
+        $expenses = $this->buildFilteredExpensesQuery($request)->get();
+
+        return response()->json([
+            'expenses' => $expenses,
+        ]);
+    }
+
+    protected function buildFilteredExpensesQuery(Request $request)
+    {
+        $search    = $request->input('search');
+        $category  = $request->input('category');
+        $startDate = $request->input('start_date');
+        $endDate   = $request->input('end_date');
 
         $today = Carbon::today()->toDateString();
 
@@ -153,11 +169,19 @@ class ExpenseService
             }
         }
 
-        $expenses = $query->orderBy('expense_date', 'desc')->get();
+        return $query->orderBy('expense_date', 'desc');
+    }
 
-        return response()->json([
-            'expenses' => $expenses,
-        ]);
+    public function exportExpensesExcel(Request $request)
+    {
+        $expenses = $this->buildFilteredExpensesQuery($request)->get();
+
+        $filename = 'HSB_Expenses_' . now()->format('Y-m-d') . '.xlsx';
+
+        return Excel::download(
+            new ExpensesExport($expenses, auth()->user()?->name ?? ''),
+            $filename
+        );
     }
 
     public function destroy(Expense $expense)
@@ -189,15 +213,21 @@ class ExpenseService
     public function updateCashierExpenses(Request $request, $id)
     {
         $request->validate([
-            'amount'      => 'required|numeric|min:0.01',
-            'description' => 'required|string|max:255',
+            'expense_category_id' => 'sometimes|integer|exists:expense_categories,id',
+            'requesting_name'     => 'nullable|string|max:255',
+            'amount'              => 'required|numeric|min:0.01',
+            'description'         => 'required|string|max:255',
+            'account_title'       => 'nullable|string|max:255',
         ]);
 
         $expense = Expense::findOrFail($id);
 
         $expense->update([
-            'amount'      => $request->amount,
-            'description' => $request->description,
+            'expense_category_id' => $request->input('expense_category_id', $expense->expense_category_id),
+            'requesting_name'     => $request->requesting_name,
+            'amount'              => $request->amount,
+            'description'         => $request->description,
+            'account_title'       => $request->account_title,
         ]);
 
         return response()->json([

@@ -8,8 +8,10 @@ class Expense extends Model
 {
     protected $fillable = [
         'expense_category_id',
+        'requesting_name',
         'description',
         'amount',
+        'account_title',
         'shift_id',
         'expense_date',
         'created_by',

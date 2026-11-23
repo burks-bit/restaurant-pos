@@ -99,11 +99,22 @@
           <h2 class="text-lg font-bold mb-4">Post Expense</h2>
 
           <div class="flex flex-col gap-3">
-            <!-- Amount -->
+            <!-- Category -->
+            <select
+              v-model="form.expense_category_id"
+              class="border rounded px-2 py-1 text-sm"
+            >
+              <option value="" disabled>Select Category</option>
+              <option v-for="cat in categories" :key="cat.id" :value="cat.id">
+                {{ cat.name }}
+              </option>
+            </select>
+
+            <!-- Requesting Name -->
             <input
-              type="number"
-              v-model="form.amount"
-              placeholder="Amount"
+              type="text"
+              v-model="form.requesting_name"
+              placeholder="Requesting Name"
               class="border rounded px-2 py-1 text-sm"
             />
 
@@ -113,6 +124,22 @@
               placeholder="Description"
               class="border rounded px-2 py-1 text-sm"
             ></textarea>
+
+            <!-- Amount -->
+            <input
+              type="number"
+              v-model="form.amount"
+              placeholder="Amount"
+              class="border rounded px-2 py-1 text-sm"
+            />
+
+            <!-- Account Title -->
+            <input
+              type="text"
+              v-model="form.account_title"
+              placeholder="Account Title"
+              class="border rounded px-2 py-1 text-sm"
+            />
 
             <div class="flex justify-end gap-2 mt-2">
               <button
@@ -124,9 +151,11 @@
 
               <button
                 @click="submit"
-                class="px-3 py-1 bg-red-500 text-white rounded"
+                :disabled="isSubmitting"
+                class="px-3 py-1 bg-red-500 text-white rounded disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                Save
+                <span v-if="isSubmitting" class="fa fa-spinner fa-spin mr-1"></span>
+                {{ isSubmitting ? 'Saving…' : 'Save' }}
               </button>
             </div>
           </div>
@@ -145,10 +174,20 @@
           </h2>
 
           <div class="flex flex-col gap-3">
+            <select
+              v-model="editForm.expense_category_id"
+              class="border rounded px-2 py-1 text-sm"
+            >
+              <option value="" disabled>Select Category</option>
+              <option v-for="cat in categories" :key="cat.id" :value="cat.id">
+                {{ cat.name }}
+              </option>
+            </select>
+
             <input
-              type="number"
-              v-model="editForm.amount"
-              placeholder="Amount"
+              type="text"
+              v-model="editForm.requesting_name"
+              placeholder="Requesting Name"
               class="border rounded px-2 py-1 text-sm"
             />
 
@@ -157,6 +196,20 @@
               placeholder="Description"
               class="border rounded px-2 py-1 text-sm"
             ></textarea>
+
+            <input
+              type="number"
+              v-model="editForm.amount"
+              placeholder="Amount"
+              class="border rounded px-2 py-1 text-sm"
+            />
+
+            <input
+              type="text"
+              v-model="editForm.account_title"
+              placeholder="Account Title"
+              class="border rounded px-2 py-1 text-sm"
+            />
 
             <div class="flex justify-end gap-2 mt-2">
               <button
@@ -189,6 +242,8 @@ import { usePage } from '@inertiajs/vue3'
 
 const page = usePage()
 
+const categories = computed(() => page.props.categories ?? [])
+
 const current_shift = computed(() => page.props.current_shift ?? [])
 const { prefix } = useRolePrefix()
 
@@ -203,34 +258,62 @@ const localExpenses = ref(page.props.expenses ?? [])
 
 const form = ref({
   shift_id: current_shift.value?.id ?? null,
+  expense_category_id: 5,
+  requesting_name: '',
+  description: '',
   amount: '',
-  description: ''
+  account_title: ''
 })
 
 const openModal = () => (showModal.value = true)
 const closeModal = () => (showModal.value = false)
 
+const isSubmitting = ref(false)
+
 const submit = async () => {
-  await axios.post(route(`${prefix.value}.expenses.store`), form.value)
-  form.value.amount = ''
-  form.value.description = ''
-  closeModal()
-  await filterByDate()
+  if (isSubmitting.value) return
+  isSubmitting.value = true
+
+  try {
+    await axios.post(route(`${prefix.value}.expenses.store`), form.value)
+    form.value.expense_category_id = 5
+    form.value.requesting_name = ''
+    form.value.description = ''
+    form.value.amount = ''
+    form.value.account_title = ''
+    closeModal()
+    await filterByDate()
+  } catch (error) {
+    console.error(error)
+    if (error.response?.data?.errors) {
+      alert(Object.values(error.response.data.errors).flat().join('\n'))
+    } else {
+      alert('Failed to save expense.')
+    }
+  } finally {
+    isSubmitting.value = false
+  }
 }
 
 // Edit state
 const showEditModal = ref(false)
 const editForm = ref({
   id: null,
+  expense_category_id: '',
+  requesting_name: '',
+  description: '',
   amount: '',
-  description: ''
+  account_title: ''
 })
 
 function openEditModal(exp) {
-  editForm.value.id          = exp.id
-  editForm.value.amount      = exp.amount
-  editForm.value.description = exp.description
-  showEditModal.value        = true
+  editForm.value.id                  = exp.id
+  editForm.value.expense_category_id = exp.expense_category_id
+  editForm.value.requesting_name     = exp.requesting_name
+  editForm.value.description         = exp.description
+  editForm.value.amount              = exp.amount
+  editForm.value.account_title       = exp.account_title
+  showEditModal.value                = true
 }
 
 function closeEditModal() {
@@ -242,8 +325,11 @@ async function submitEdit() {
     await axios.put(
       route(`${prefix.value}.cashier_expenses.update`, editForm.value.id),
       {
-        amount:      editForm.value.amount,
-        description: editForm.value.description,
+        expense_category_id: editForm.value.expense_category_id,
+        requesting_name:     editForm.value.requesting_name,
+        description:         editForm.value.description,
+        amount:              editForm.value.amount,
+        account_title:       editForm.value.account_title,
       }
     )
     closeEditModal()

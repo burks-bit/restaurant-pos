@@ -48,6 +48,16 @@ class ExpenseController extends Controller
         }
     }
 
+    public function exportExpensesExcel(Request $request)
+    {
+        try {
+            return $this->expenseService->exportExpensesExcel($request);
+        } catch (\Throwable $e) {
+            Log::error('ExpenseController@exportExpensesExcel failed: ' . $e->getMessage());
+            return back()->with('error', 'Failed to export expenses.');
+        }
+    }
+
     public function destroy(Expense $expense)
     {
         try {
